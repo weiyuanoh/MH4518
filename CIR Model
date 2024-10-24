@@ -1,3 +1,57 @@
+#LOAD DATA
+# Load price data for Lonza and Sika
+prices_lonza <- read.csv("lonza_prices.csv")
+prices_sika <- read.csv("sika_prices.csv")
+
+# Extract closing prices and dates
+dates <- as.Date(prices_lonza$Date)
+closing_prices_lonza <- prices_lonza$Close
+closing_prices_sika <- prices_sika$Close
+
+#CALC LOG RETURN
+# Calculate log returns
+returns_lonza <- diff(log(closing_prices_lonza))
+returns_sika <- diff(log(closing_prices_sika))
+
+#CALC VOLAT
+# Calculate daily volatilities
+sd_lonza_daily <- sd(returns_lonza)
+sd_sika_daily <- sd(returns_sika)
+
+# Annualize volatilities
+volatility_lonza <- sd_lonza_daily * sqrt(252)
+volatility_sika <- sd_sika_daily * sqrt(252)
+
+#CALC CORR
+# Calculate correlation
+correlation <- cor(returns_lonza, returns_sika)
+
+#CALC DIV (Do we need it?)
+# Assume you have dividend data
+dividends_lonza <- read.csv("lonza_dividends.csv")
+dividends_sika <- read.csv("sika_dividends.csv")
+
+# Calculate annual dividends
+annual_dividend_lonza <- sum(dividends_lonza$Dividend)
+annual_dividend_sika <- sum(dividends_sika$Dividend)
+
+# Current stock prices
+current_price_lonza <- tail(closing_prices_lonza, n = 1)
+current_price_sika <- tail(closing_prices_sika, n = 1)
+
+# Dividend yields
+dividend_yield_lonza <- annual_dividend_lonza / current_price_lonza
+dividend_yield_sika <- annual_dividend_sika / current_price_sika
+
+#INT PARA
+# Load historical interest rate data
+interest_rates <- read.csv("interest_rates.csv")
+r_data <- interest_rates$Rate
+dt <- 1 / 252  # Assuming daily data
+
+
+
+#CIR MOD
 # Load necessary libraries
 library(MASS)    # For mvrnorm function to simulate correlated random variables
 library(ggplot2) # Optional, for plotting (not used in this code)
