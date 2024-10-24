@@ -1,0 +1,170 @@
+# Load necessary libraries
+library(MASS)    # For mvrnorm function to simulate correlated random variables
+library(ggplot2) # Optional, for plotting (not used in this code)
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Simulation parameters
+num_simulations <- 10000   # Number of simulation paths
+days_in_year <- 252        # Trading days in a year
+total_months <- 15         # Total months to maturity
+total_days <- total_months * 21  # Approximate trading days (21 per month)
+dt <- 1 / days_in_year     # Time step in years
+
+# Interest rate model parameters (CIR model)
+r0 <- 0.005          # Initial interest rate (0.5%)
+kappa <- 0.1         # Speed of mean reversion
+theta <- 0.02        # Long-term mean level (2%)
+sigma_r <- 0.01      # Interest rate volatility (1%)
+
+# Asset model parameters
+S0 <- c(549.60, 240.40)   # Initial prices for Lonza and Sika
+volatilities <- c(0.25, 0.30)   # Volatilities for Lonza and Sika
+dividends <- c(0, 0)            # Dividend yields (assumed zero)
+correlation <- 0.6              # Correlation between assets
+
+# Conversion ratios
+conversion_ratios <- c(1.8195, 4.1597)
+
+# Barrier and early redemption levels
+barrier_levels <- S0 * 0.60           # 60% of Initial Level
+early_redemption_levels <- S0 * 1.00  # 100% of Initial Level
+
+# Coupon parameters
+coupon_rate <- 0.08                   # 8% p.a.
+coupon_payment <- 1000 * coupon_rate / 4  # Quarterly coupon payment (CHF 20)
+
+# Time points
+time_points <- seq(0, total_days * dt, by = dt)  # Time vector
+num_steps <- length(time_points)
+
+# Early redemption observation dates (after 6 months, quarterly)
+early_redemption_times <- c(6, 9, 12) * 21 * dt  # Convert months to time in years
+early_redemption_indices <- sapply(early_redemption_times, function(x) which.min(abs(time_points - x)))
+
+# Coupon payment dates (quarterly)
+coupon_payment_times <- seq(3, total_months, by = 3) * 21 * dt
+coupon_payment_indices <- sapply(coupon_payment_times, function(x) which.min(abs(time_points - x)))
+
+# Initialize matrices to store simulation results
+discount_factors <- matrix(0, nrow = num_simulations, ncol = num_steps)
+interest_rates <- matrix(0, nrow = num_simulations, ncol = num_steps)
+asset_prices <- array(0, dim = c(num_simulations, num_steps, 2))  # For two assets
+barrier_breached <- matrix(FALSE, nrow = num_simulations, ncol = 2)  # For two assets
+early_redemption <- rep(FALSE, num_simulations)
+redemption_time <- rep(NA, num_simulations)
+payoffs <- rep(0, num_simulations)
+
+# Pre-calculate Cholesky decomposition for correlated asset simulation
+correlation_matrix <- matrix(c(1, correlation, correlation, 1), nrow = 2)
+chol_matrix <- chol(correlation_matrix)
+
+# Function to simulate interest rate path using CIR model
+simulate_CIR <- function(r0, kappa, theta, sigma_r, num_steps, dt) {
+  r <- numeric(num_steps)
+  r[1] <- r0
+  for (i in 2:num_steps) {
+    dr <- kappa * (theta - r[i - 1]) * dt + sigma_r * sqrt(max(r[i - 1], 0)) * sqrt(dt) * rnorm(1)
+    r[i] <- r[i - 1] + dr
+    r[i] <- max(r[i], 0)  # Ensure non-negative interest rates
+  }
+  return(r)
+}
+
+# Main simulation loop
+for (sim in 1:num_simulations) {
+  # Simulate interest rate path
+  r_t <- simulate_CIR(r0, kappa, theta, sigma_r, num_steps, dt)
+  interest_rates[sim, ] <- r_t
+  
+  # Calculate discount factors
+  discount_factors[sim, ] <- exp(-cumsum(r_t) * dt)
+  
+  # Simulate asset price paths
+  S_t <- matrix(0, nrow = num_steps, ncol = 2)
+  S_t[1, ] <- S0
+  ln_S_t <- log(S0)
+  
+  # Generate correlated Brownian motions
+  Z <- mvrnorm(n = num_steps - 1, mu = c(0, 0), Sigma = correlation_matrix)
+  
+  for (i in 2:num_steps) {
+    # Drift terms (risk-neutral measure)
+    mu_t <- (r_t[i - 1] - dividends - 0.5 * volatilities^2) * dt
+    # Diffusion terms
+    sigma_t <- volatilities * sqrt(dt) * Z[i - 1, ]
+    # Update log prices
+    ln_S_t <- ln_S_t + mu_t + sigma_t
+    # Convert back to price
+    S_t[i, ] <- exp(ln_S_t)
+    # Check for barrier breach
+    if (!barrier_breached[sim, 1] && S_t[i, 1] <= barrier_levels[1]) {
+      barrier_breached[sim, 1] <- TRUE
+    }
+    if (!barrier_breached[sim, 2] && S_t[i, 2] <= barrier_levels[2]) {
+      barrier_breached[sim, 2] <- TRUE
+    }
+    # Check if any asset has dropped to zero
+    if (S_t[i, 1] <= 0) {
+      S_t[i, 1] <- 0
+    }
+    if (S_t[i, 2] <= 0) {
+      S_t[i, 2] <- 0
+    }
+  }
+  asset_prices[sim, , ] <- S_t
+  
+  # Initialize cash flows
+  cash_flows <- rep(0, num_steps)
+  
+  # Pay coupons on coupon payment dates
+  cash_flows[coupon_payment_indices] <- coupon_payment
+  
+  # Early redemption check
+  for (idx in early_redemption_indices) {
+    if (all(S_t[idx, ] >= early_redemption_levels)) {
+      # Early redemption occurs
+      early_redemption[sim] <- TRUE
+      redemption_time[sim] <- time_points[idx]
+      cash_flows[idx] <- cash_flows[idx] + 1000  # Nominal amount
+      break  # Exit early redemption check
+    }
+  }
+  
+  if (!early_redemption[sim]) {
+    # No early redemption occurred
+    # Final payoff determination
+    final_idx <- num_steps
+    final_prices <- S_t[final_idx, ]
+    initial_prices <- S0
+    performances <- final_prices / initial_prices
+    worst_performance <- min(performances)
+    worst_asset <- which.min(performances)
+    
+    if (any(S_t[, worst_asset] == 0)) {
+      # Worst-case scenario: asset dropped to zero
+      cash_flows[final_idx] <- cash_flows[final_idx] + 0  # Lose invested capital
+    } else if (!any(barrier_breached[sim, ]) || all(final_prices >= initial_prices)) {
+      # Best case: No barrier breach or all assets at or above Initial Level at maturity
+      cash_flows[final_idx] <- cash_flows[final_idx] + 1000  # Return nominal amount
+    } else {
+      # Intermediate case: Barrier breached and worst asset below Initial Level
+      # Physical delivery of worst-performing asset
+      # For valuation, convert to cash equivalent
+      num_shares = conversion_ratios[worst_asset]
+      value_of_shares = num_shares * final_prices[worst_asset]
+      cash_flows[final_idx] <- cash_flows[final_idx] + value_of_shares
+    }
+  }
+  
+  # Calculate present value of cash flows
+  pv_cash_flows <- cash_flows * discount_factors[sim, ]
+  payoffs[sim] <- sum(pv_cash_flows)
+}
+
+# Calculate the estimated fair value of the product
+estimated_fair_value <- mean(payoffs)
+
+# Output the result
+cat("Estimated Fair Value of the Product per CHF 1,000 Nominal:", round(estimated_fair_value, 2), "CHF\n")
