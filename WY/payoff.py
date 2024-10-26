@@ -1,5 +1,9 @@
 import pandas as pd 
 import numpy as np 
+import constants as cs
+import Dates as dates 
+
+
 
 def calculate_payoff(pathS1, pathS2, terminalS1, terminalS2, initinvestment, initpriceS1 =  549.60, initpriceS2 = 240.40,  barrierS1 = 329.76, barrierS2= 144.24, conversionratioS1 = 1.8195, conversionratioS2 = 4.1597):
     '''
@@ -30,7 +34,7 @@ def calculate_payoff(pathS1, pathS2, terminalS1, terminalS2, initinvestment, ini
 
     return payoff 
 
-def checkbarrier():
+def checkbarrier(sim: pd.DataFrame, barrierS1: int, barrierS2):
     """
     Takes in 1 simulated path of 2 assets and check if any of the barriers have been reached 
 
@@ -38,10 +42,17 @@ def checkbarrier():
     Returns:
         True if at least one of the barriers has been breached throught the lifetime of this simulaation
     """
-    pass 
+    barrierhit = False
+    s1_path = sim['LONN.SW']
+    s2_path = sim['SIKA.SW']
+    if  min(s1_path) < barrierS1 or min(s2_path) < barrierS2:
+        barrierhit = True 
+    else: 
+        barrierhit = False 
+    return barrierhit 
 
 
-def check_terminal():
+def check_terminal(sim: pd.DataFrame, initialS1: float, initialS2: float):
     """
     Takes in 1 simulated path of 2 assets and check if the terminal price < initial price on initial fixing date 
 
@@ -49,7 +60,17 @@ def check_terminal():
         True if one of the assets has terminal price lower then the initial price 
 
     """
-    pass 
+    terminallower = False
+    terminalS1 = sim['LONN.SW'][-1]
+    terminalS2 = sim['SIKA.SW'][-1]
+    if terminalS1 < initialS1 or terminalS2 < initialS2:
+        terminallower = True 
+    else:
+        terminallower = False
+
+    return terminallower
+
+def autocall(sim, )
 
 def payoff(sim , checkbarrier):
     """
@@ -58,7 +79,13 @@ def payoff(sim , checkbarrier):
     Returns:
         
     """
+    if 
+
     pass 
+
+
+
+
 def discounting_to_present_1(sims: pd.dataFrame):
 
     """

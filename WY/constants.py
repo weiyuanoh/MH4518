@@ -25,3 +25,11 @@ window_len = (final_fixing_date - initial_fixing_date).days + 1
 interest_rate = 0.018
 
 n_sims = 100
+
+initialS1 : float = 549.60
+
+initialS2 : float = 240.40
+
+barrierS1 : float = 329.76
+
+barrierS2 : float = 144.24

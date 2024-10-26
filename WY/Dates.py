@@ -1,5 +1,6 @@
 import pandas as pd 
 import pandas_market_calendars as cal 
+import constants as cs 
 
 def num_business_days(startdate, enddate):
     """ 
@@ -21,11 +22,15 @@ def num_business_days(startdate, enddate):
     return n_busi_days
  
 
-def get_early_observation_dates():
+def get_early_observation_dates(initialdate = cs.initial_fixing_date, enddate = cs.final_fixing_date):
     """
     Given start date and end data
 
     Returns:
         list of early observation dates between start date and end date
     """
-    pass
+    first_observation_date = initialdate + pd.DateOffset(months=6)
+    redemption_dates = pd.date_range(start=first_observation_date, end=enddate, freq='Q')
+    redemption_dates = redemption_dates.to_list()
+
+    return redemption_dates
