@@ -34,3 +34,12 @@ def get_early_observation_dates(initialdate = cs.initial_fixing_date, enddate = 
     redemption_dates = redemption_dates.to_list()
 
     return redemption_dates
+
+
+def add_business_days(date: pd.Timestamp):
+    # Get the valid trading days starting from the next day
+    six_cal = cal.get_calendar('SIX')
+    valid_days = six_cal.valid_days(start_date=date + pd.tseries.offsets.BusinessDay(1), end_date=date + pd.Timedelta(days=10))
+    
+    # Return the first valid day
+    return valid_days[0]

@@ -34,7 +34,7 @@ def calculate_payoff(pathS1, pathS2, terminalS1, terminalS2, initinvestment, ini
 
     return payoff 
 
-def checkbarrier(sim: pd.DataFrame, barrierS1: int, barrierS2):
+def checkbarrier(simS1 : pd.DataFrame, simS2 : pd.DataFrame, barrierS1: int, barrierS2):
     """
     Takes in 1 simulated path of 2 assets and check if any of the barriers have been reached 
 
@@ -42,27 +42,27 @@ def checkbarrier(sim: pd.DataFrame, barrierS1: int, barrierS2):
     Returns:
         True if at least one of the barriers has been breached throught the lifetime of this simulaation
     """
-    barrierhit = False
-    s1_path = sim['LONN.SW']
-    s2_path = sim['SIKA.SW']
-    if  min(s1_path) < barrierS1 or min(s2_path) < barrierS2:
+
+    if  min(simS1) < barrierS1 or min(simS2) < barrierS2:
         barrierhit = True 
     else: 
         barrierhit = False 
-    return barrierhit 
+    return barrierhit
 
 
-def check_terminal(sim: pd.DataFrame, initialS1: float, initialS2: float):
+
+
+def check_terminal(simS1 : pd.DataFrame, simS2 : pd.DataFrame, initialS1: float, initialS2: float):
     """
-    Takes in 1 simulated path of 2 assets and check if the terminal price < initial price on initial fixing date 
+    Takes in seperated dataframe of each assets simulated paths and check if the terminal price of each simulation above the initial level
 
     Returns:
         True if one of the assets has terminal price lower then the initial price 
 
     """
     terminallower = False
-    terminalS1 = sim['LONN.SW'][-1]
-    terminalS2 = sim['SIKA.SW'][-1]
+    terminalS1 = simS1[-1]
+    terminalS2 = simS2[-1]
     if terminalS1 < initialS1 or terminalS2 < initialS2:
         terminallower = True 
     else:
@@ -70,23 +70,65 @@ def check_terminal(sim: pd.DataFrame, initialS1: float, initialS2: float):
 
     return terminallower
 
-def autocall(sim, )
+def autocall(sim : pd.DataFrame, earlyredemption: list) :   
+    """
+    Takes in a simulated path and check if early redemption is possible at each early redemption date 
 
-def payoff(sim , checkbarrier):
+    
+    """
+    earlyredemption = False 
+    for date in earlyredemption:
+        vectorprice = sim.loc[date]
+        lonza_price = vectorprice[0]
+        sika_price = vectorprice[1]
+        if lonza_price >= cs.initialS1 and sika_price >= cs.initialS2:
+            earlyredemption = True 
+    return earlyredemption
+
+def payoff(paths1, paths2 , params):
     """
     Takes in 1 simulated path of 2 assets and check if any of the barriers have been reached 
 
     Returns:
         
     """
-    if 
+    
+    
+        # check for early redemption 
+    lonza_path = paths1 
+    sika_path = paths2 
+    M = lonza_path.shape[1] # number of simulations 
+    N = lonza_path.shape[0] - 1 # number of time steps 
+    payoffs = np.zeros(M)
+    dt = cs.n_steps_per_year
+    for i in range(M): # iterating each simulation 
+        early_redeem = False 
+        lonza = lonza_path.iloc[:,i]
+        sika = sika_path.iloc[:, i]
+        for date , t_dates in enumerate(dates.get_early_observation_dates(cs.initial_fixing_date, cs.final_fixing_date)):
+            if (lonza.loc[t_dates] >= cs.initialS1 and sika.loc[t_dates] >= cs.initialS2):
+                # early redemption
+                early_redemption_date = dates.add_business_days(date= t_dates)
+                payoffs[i] = params['Denomination']* (1 + params['Coupon_Rate'] * dates.num_business_days(cs.initial_fixing_date, early_redemption_date))
+                early_redeem = True 
+                break 
+        if not early_redeem :
+            barrierhit = checkbarrier(lonza, sika, cs.barrierS1, cs.barrierS2)
+            terminallower = check_terminal(lonza, sika, cs.initialS1, cs.initialS2)
 
-    pass 
+            if barrierhit == False and terminallower == False : # best case scenario
+                payoffs[i] = params['Denomination'] * (1 + params['Coupon_Rate'] * dates.num_business_days(cs.initial_fixing_date, cs.final_fixing_date))
+            else: 
+                perf_lonza = lonza[-1]/ cs.initialS1
+                perf_sika = sika[-1]/cs.initialS2
+
+                worse_perf = min(perf_lonza, perf_sika)
+                payoffs[i] = params['Denomination'] * worse_perf
+                payoffs[i] += params['Denomination'] * params['Coupon_Rate'] * dates.num_business_days(cs.initial_fixing_date, cs.final_fixing_date)
+    return payoffs
 
 
-
-
-def discounting_to_present_1(sims: pd.dataFrame):
+def discounting_to_present_1(sims: pd.DataFrame):
 
     """
     Takes in a dataframe of simulated results from stock price 
@@ -94,3 +136,8 @@ def discounting_to_present_1(sims: pd.dataFrame):
     2. checks for early redemption 
     """
     pass
+
+
+
+## example usage 
+
