@@ -22,16 +22,28 @@ def num_business_days(startdate, enddate):
     return n_busi_days
  
 
-def get_early_observation_dates(initialdate = cs.initial_fixing_date, enddate = cs.final_fixing_date):
+def get_early_observation_dates(initialdate, enddate):
     """
-    Given start date and end data
+    Given start date and end date
 
     Returns:
         list of early observation dates between start date and end date
     """
+    # Define the SIX exchange calendar
+    six_cal = cal.get_calendar('SIX')
+
+    # Calculate the first observation date
     first_observation_date = initialdate + pd.DateOffset(months=6)
+
+    # Generate the date range with quarterly frequency
     redemption_dates = pd.date_range(start=first_observation_date, end=enddate, freq='Q')
-    redemption_dates = redemption_dates.to_list()
+
+    # Filter the dates to include only trading days
+    trading_days = six_cal.valid_days(start_date=first_observation_date, end_date=enddate)
+    redemption_dates = [date for date in redemption_dates if date in trading_days]
+
+    # Make dates timezone naive
+    redemption_dates = [date.tz_localize(None) for date in redemption_dates]
 
     return redemption_dates
 
@@ -43,3 +55,39 @@ def add_business_days(date: pd.Timestamp):
     
     # Return the first valid day
     return valid_days[0]
+
+def get_list_dates(startdate: pd.Timestamp, enddate: pd.Timestamp):
+    """
+    Parameters:
+        startdate : initial date to calculate date range 
+        enddate : final date to calculate date range 
+
+    Returns:
+        list of dates in between these 2 dates inclusive according to the SIX exchange calendar
+    """
+    # Define the SIX exchange calendar
+    six_cal = cal.get_calendar('SIX')
+
+    # Get the valid trading days between the start and end dates
+    trading_days = six_cal.valid_days(start_date=startdate, end_date=enddate)
+
+    # Make dates timezone naive
+    date_list = [date.tz_localize(None) for date in trading_days]
+
+    return date_list
+
+
+def business_days_in_quarter(start_date: pd.Timestamp, end_date: pd.Timestamp):
+    # Define the SIX exchange calendar
+    six_cal = cal.get_calendar('SIX')
+
+    # Get the valid trading days between the start and end dates
+    trading_days = six_cal.valid_days(start_date=start_date, end_date=end_date)
+
+    # Make dates timezone naive
+    trading_days = trading_days.tz_localize(None)
+
+    # Count the number of business days
+    num_business_days = len(trading_days)
+
+    return num_business_days

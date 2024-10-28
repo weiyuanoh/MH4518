@@ -20,7 +20,7 @@ n_steps_per_year = 252
 
 dt = 1/n_steps_per_year
 
-window_len = (final_fixing_date - initial_fixing_date).days + 1
+total_length_simulation = (final_fixing_date - initial_fixing_date).days + 1
 
 interest_rate = 0.018
 
