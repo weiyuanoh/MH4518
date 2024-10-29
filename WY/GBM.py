@@ -11,121 +11,161 @@ import payoff as pf
 
 def multi_asset_gbm(data: pd.DataFrame, fdos) -> pd.DataFrame:
     """
-    Simulation for 1 day and 1 simulation 
+    Simulates multiple asset paths under the risk-neutral measure using GBM.
 
     Params:
-        fdos : Specified first day of simulation, to be used in pricing 
-        data : get data function 
+        data : DataFrame containing historical price data for each asset.
+        fdos : First date of simulation (datetime object).
     
+    Returns:
+        sim_data : DataFrame containing simulated asset prices.
     """
+    import numpy as np
+    import pandas as pd
+    
+    # Constants (assuming they are defined elsewhere)
+    # For example:
+    # cs.ticker_list = ['Asset1', 'Asset2']
+    # cs.interest_rate = 0.01  # Risk-free rate
+    # cs.dt = 1/252  # Time step in years (daily steps)
+    # cs.final_fixing_date = datetime object
+    # cs.num_ticker = len(cs.ticker_list)
+    
     try:
-        log_returns_list = []
+        # Prepare the log returns DataFrame
+        log_returns_df = pd.DataFrame()
         for ticker in cs.ticker_list:
-            log_returns = np.log(data[ticker]/data[ticker].shift(1))
-            log_returns.dropna(inplace = True) # A series
-            log_returns_list.append(log_returns)
+            log_returns = np.log(data[ticker] / data[ticker].shift(1))
+            log_returns_df[ticker] = log_returns
+        log_returns_df.dropna(inplace=True)
         
     except Exception as e:
-        raise Exception("Error at generating log return.")
+        raise Exception("Error at generating log returns.") from e
 
-
-    try: 
-        cov_matrix = np.cov(np.array(log_returns_list))
+    try:
+        # Compute the covariance matrix of log returns
+        cov_matrix = log_returns_df.cov().values  # Shape: (num_assets, num_assets)
+        # Compute the standard deviations (volatilities)
+        vol_vector = np.sqrt(np.diag(cov_matrix))
+        # Cholesky decomposition
         L = np.linalg.cholesky(cov_matrix)
         
     except Exception as e:
-        raise Exception("Error at covariance matrix.")
+        raise Exception("Error at covariance matrix computation.") from e
 
     try:
-        
+        # Simulation parameters
         date_list = dates.get_list_dates(fdos, cs.final_fixing_date)
-        s0_vector_fdos = data.loc[fdos]
+        s0_vector = data.loc[fdos, cs.ticker_list].values  # Initial prices as NumPy array
         sim_window = dates.num_business_days(fdos, cs.final_fixing_date)
+        dt = cs.dt  # Time step in years
         
-        sim_data = pd.DataFrame(np.zeros((sim_window, cs.num_ticker)), columns = cs.ticker_list)
-        Zlist = np.random.normal(0, 1, (cs.num_ticker, sim_window))
-        for t in range(sim_window): # for each timestep
-            Z = Zlist[:, t] # for each time step, use a iid randomness 
-            LZ = np.dot(L, Z.T)
-            
-            for i in range(cs.num_ticker):
-                s0_vector_fdos[i] = s0_vector_fdos[i] * np.exp(cs.interest_rate * cs.dt - 0.5 * cov_matrix[i][i] * cs.dt + LZ[i])
-                
-                sim_data.loc[t, cs.ticker_list[i]] = s0_vector_fdos[i]
-
-    
-
+        # Initialize the simulated data DataFrame
+        sim_data = pd.DataFrame(index=date_list, columns=cs.ticker_list)
+        sim_data.iloc[0] = s0_vector  # Set initial prices
+        
+        # Precompute drift terms
+        drift = (cs.interest_rate - 0.5 * vol_vector ** 2) * dt
+        
+        # Generate random variables for all time steps and assets
+        Z = np.random.normal(size=(sim_window - 1, cs.num_ticker))
+        # Generate correlated random variables
+        epsilon = Z @ L.T * np.sqrt(dt)  # Shape: (sim_window - 1, num_assets)
+        
+        # Simulate asset prices
+        S = np.zeros((sim_window, cs.num_ticker))
+        S[0] = s0_vector  # Initial prices
+        
+        for t in range(1, sim_window):
+            S[t] = S[t - 1] * np.exp(drift + epsilon[t - 1])
+            sim_data.iloc[t] = S[t]
+        
     except Exception as e:
-        raise Exception("Error at Simulation")
-    
-    sim_data.index = date_list
+        raise Exception("Error during simulation.") from e
+
     return sim_data
 
 
-def multi_asset_gbm_n_sims(plot : bool, plotasset : bool, nsims, data, fdos) -> pd.DataFrame:
-    """
-    n simulations for 1 day 
 
-    params:
-        fdos: specified day for simulation, to be used in pricing 
-        nsims: number of simulations to be carried out on this specified day
-    
+
+
+
+
+def multi_asset_gbm_n_sims(plot: bool, plotasset: bool, nsims: int, data: pd.DataFrame, fdos) -> pd.DataFrame:
     """
+    Simulate multiple asset paths under the GBM model for 'nsims' simulations starting from 'fdos'.
+
+    Params:
+        plot (bool): Whether to plot the combined simulations.
+        plotasset (bool): Whether to plot the simulations for each asset separately.
+        nsims (int): Number of simulations to run.
+        data (pd.DataFrame): Historical data for assets.
+        fdos: First date of simulation.
+
+    Returns:
+        sim_data_combine (pd.DataFrame): DataFrame containing simulated asset prices for all simulations.
+    """
+    import matplotlib.pyplot as plt
+    import pandas as pd
+
+    # Assuming 'cs' and 'dates' are defined and accessible
+    simulations = []
     
-    sim_data_combine = pd.DataFrame()
+    # Get the list of dates for the simulation period
+    date_list = dates.get_list_dates(fdos, cs.final_fixing_date)
+    
+    # Realized price from initial fixing date to final fixing date
     realised_price = data.loc[cs.initial_fixing_date: cs.final_fixing_date]
-    try: 
+    
+    try:
         for n in range(nsims):
-            
+            # Run the simulation
             sim_data = multi_asset_gbm(data, fdos)
-            sim_data_combine = pd.concat([sim_data_combine,sim_data], axis =1 )
-        # formatting Dates 
-        date_list = dates.get_list_dates(fdos, cs.final_fixing_date)
-        if (len(sim_data) == len(date_list)):
-            sim_data_combine.index = date_list
-        else:
-            print((f"The length of sim_data and dates is different: {len(sim_data)} and {len(date_list)}\n"))
+            # Ensure sim_data has the correct index (dates)
+            sim_data.index = date_list
+            # Rename columns to include the simulation number
+            sim_data.columns = [f"{col}_sim{n+1}" for col in sim_data.columns]
+            simulations.append(sim_data)
     except Exception as e:
-        raise Exception("Error at Simulation")
+        raise Exception("Error during simulation") from e
 
+    # Combine all simulations along the columns
+    sim_data_combine = pd.concat(simulations, axis=1)
 
-        
-    if plot == True: 
-        fig, ax = plt.subplots()
-        
-        realised_price.plot(ax=ax)
-        sim_data.plot(ax=ax)
-        
+    # Ensure the index is set to date_list
+    sim_data_combine.index = date_list
+
+    if plot:
+        fig, ax = plt.subplots(figsize=(12, 6))
+        # Plot the realized prices
+        realised_price.plot(ax=ax, linewidth=2)
+        # Plot the simulated paths
+        sim_data_combine.plot(ax=ax, alpha=0.4, legend=False)
+        plt.title('Simulated Paths with Realized Prices')
+        plt.xlabel('Date')
+        plt.ylabel('Price')
+        plt.grid(True)
+        plt.show()
+
     if plotasset:
-        # Select odd-numbered columns for Lonza paths
-        lonza_path = sim_data_combine.iloc[:, ::2]
-        # Select the realized price for Lonza (assuming it's the first column)
-        realised_price_lonza = realised_price.iloc[:, 0]  # Adjust the index if necessary
+        for asset in cs.ticker_list:
+            # Select columns for the asset
+            asset_columns = [col for col in sim_data_combine.columns if col.startswith(asset)]
+            asset_paths = sim_data_combine[asset_columns]
+            # Select the realized price for the asset
+            realised_price_asset = realised_price[asset]  # Adjust the column name if necessary
 
-        # Select even-numbered columns for Sika paths
-        sika_path = sim_data_combine.iloc[:, 1::2]
-        # Select the realized price for Sika (assuming it's the second column)
-        realised_price_sika = realised_price.iloc[:, 1]  # Adjust the index if necessary
-
-        # Plot Lonza paths and realized price
-        fig, ax = plt.subplots()
-        lonza_path.plot(ax=ax, alpha=0.4, legend=False)
-        realised_price_lonza.plot(ax=ax, color='black', linewidth=2, label='Realised Price Lonza')
-        handles, labels = ax.get_legend_handles_labels()
-        ax.legend(handles=[handles[-1]], labels=[labels[-1]])  # Only keep the last legend entry
-        plt.title('Lonza Path under Multi Asset GBM')
-        plt.xlabel('Index')
-        plt.ylabel('Values')
-        plt.show()
-
-        # Plot Sika paths and realized price
-        fig, ax = plt.subplots()
-        sika_path.plot(ax=ax, alpha=0.4, legend=False)
-        realised_price_sika.plot(ax=ax, color='black', linewidth=2, label='Realised Price Sika')
-        handles, labels = ax.get_legend_handles_labels()
-        ax.legend(handles=[handles[-1]], labels=[labels[-1]])  # Only keep the last legend entry
-        plt.title('Sika Path under Multi Asset GBM')
-        plt.xlabel('Index')
-        plt.ylabel('Values')
-        plt.show()
+            # Plot asset paths and realized price
+            fig, ax = plt.subplots(figsize=(12, 6))
+            asset_paths.plot(ax=ax, alpha=0.4, legend=False)
+            realised_price_asset.plot(ax=ax, color='black', linewidth=2, label=f'Realized Price {asset}')
+            ax.legend()
+            plt.title(f'{asset} Paths under Multi Asset GBM')
+            plt.xlabel('Date')
+            plt.ylabel('Price')
+            plt.grid(True)
+            plt.show()
+            
     return sim_data_combine
+
+

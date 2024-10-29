@@ -24,7 +24,7 @@ total_length_simulation = (final_fixing_date - initial_fixing_date).days + 1
 
 interest_rate = 0.018
 
-n_sims = 50
+n_sims = 5
 
 initialS1 : float = 549.60
 

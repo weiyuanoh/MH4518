@@ -34,97 +34,81 @@ def calculate_payoff(pathS1, pathS2, terminalS1, terminalS2, initinvestment, ini
 
     return payoff 
 
-def checkbarrier(simS1 : pd.DataFrame, simS2 : pd.DataFrame, barrierS1: int, barrierS2):
+
+
+def payoff(paths1, paths2, params, fdos):
     """
-    Takes in 1 simulated path of 2 assets and check if any of the barriers have been reached 
-
-
-    Returns:
-        True if at least one of the barriers has been breached throught the lifetime of this simulaation
-    """
-
-    if  min(simS1) < barrierS1 or min(simS2) < barrierS2:
-        barrierhit = True 
-    else: 
-        barrierhit = False 
-    return barrierhit
-
-
-
-
-def check_terminal(simS1 : pd.DataFrame, simS2 : pd.DataFrame, initialS1: float, initialS2: float):
-    """
-    Takes in seperated dataframe of each assets simulated paths and check if the terminal price of each simulation above the initial level
-
-    Returns:
-        True if one of the assets has terminal price lower then the initial price 
-
-    """
-    terminallower = False
-    terminalS1 = simS1[-1]
-    terminalS2 = simS2[-1]
-    if terminalS1 < initialS1 or terminalS2 < initialS2:
-        terminallower = True 
-    else:
-        terminallower = False
-
-    return terminallower
-
-def autocall(sim : pd.DataFrame, earlyredemption: list) :   
-    """
-    Takes in a simulated path and check if early redemption is possible at each early redemption date 
-
+    Calculates the payoff for each simulation based on the product conditions.
     
-    """
-    earlyredemption = False 
-    for date in earlyredemption:
-        vectorprice = sim.loc[date]
-        lonza_price = vectorprice[0]
-        sika_price = vectorprice[1]
-        if lonza_price >= cs.initialS1 and sika_price >= cs.initialS2:
-            earlyredemption = True 
-    return earlyredemption
-
-def payoff(paths1, paths2 , params, fdos):
-    """
-    Takes in 1 simulated path of 2 assets and check if any of the barriers have been reached 
-
+    Params:
+        paths1: DataFrame of simulated paths for Lonza (columns: simulations)
+        paths2: DataFrame of simulated paths for Sika (columns: simulations)
+        params: Dictionary containing product parameters
+        fdos: First date of simulation (pricing date)
+    
     Returns:
-        
+        payoffs: Array of payoffs for each simulation
     """
-    
-    
-        # check for early redemption 
-    lonza_path = paths1 
-    sika_path = paths2 
-    M = lonza_path.shape[1] # number of simulations 
-    N = lonza_path.shape[0] - 1 # number of time steps 
+    import numpy as np
+    from dateutil.relativedelta import relativedelta
+
+    def get_number_of_coupon_periods(start_date, end_date, frequency='quarterly'):
+        delta = relativedelta(end_date, start_date)
+        if frequency == 'quarterly':
+            periods = delta.years * 4 + delta.months // 3
+        elif frequency == 'monthly':
+            periods = delta.years * 12 + delta.months
+        else:
+            periods = delta.years  # Assuming annual
+        return periods
+
+    def checkbarrier(lonza, sika, barrierS1, barrierS2):
+        # Assuming daily monitoring
+        barrier_breach = ((lonza <= barrierS1) | (sika <= barrierS2)).any()
+        return barrier_breach
+
+    def check_terminal(lonza, sika, initialS1, initialS2):
+        terminal_condition = (lonza.iloc[-1] < initialS1) or (sika.iloc[-1] < initialS2)
+        return terminal_condition
+
+    lonza_path = paths1
+    sika_path = paths2
+    M = lonza_path.shape[1]  # Number of simulations
     payoffs = np.zeros(M)
-    dt = cs.dt
-    for i in range(M): # for each simulation 
-        early_redeem = False 
-        lonza = lonza_path.iloc[:,i]
+
+    for i in range(M):  # For each simulation
+        early_redeem = False
+        lonza = lonza_path.iloc[:, i]
         sika = sika_path.iloc[:, i]
-        for date , t_dates in enumerate(dates.get_early_observation_dates(cs.initial_fixing_date, cs.final_fixing_date)):
-            if (lonza.loc[t_dates] >= cs.initialS1 and sika.loc[t_dates] >= cs.initialS2):
-                # early redemption
-                early_redemption_date = dates.add_business_days(date= t_dates)
-                payoffs[i] = params['Denomination']* (1 + params['Coupon_Rate'] * dates.num_business_days(fdos, early_redemption_date))
-                early_redeem = True 
-                break 
-        if not early_redeem :
+        early_observation_dates = dates.get_early_observation_dates(cs.initial_fixing_date, cs.final_fixing_date)
+        
+        for date_idx, t_date in enumerate(early_observation_dates):
+            if (lonza.loc[t_date] >= cs.initialS1) and (sika.loc[t_date] >= cs.initialS2):
+                # Early redemption
+                # Assume settlement delay (e.g., 2 business days)
+                settlement_delay = params.get('Settlement_Delay', 2)
+                early_redemption_date = dates.add_business_days(t_date, settlement_delay)
+                periods = get_number_of_coupon_periods(fdos, early_redemption_date)
+                payoffs[i] = params['Denomination'] * (1 + params['Coupon_Rate'] * periods)
+                early_redeem = True
+                break  # Exit the early observation loop
+
+        if not early_redeem:
             barrierhit = checkbarrier(lonza, sika, cs.barrierS1, cs.barrierS2)
             terminallower = check_terminal(lonza, sika, cs.initialS1, cs.initialS2)
 
-            if barrierhit == False and terminallower == False : # best case scenario
-                payoffs[i] = params['Denomination'] * (1 + params['Coupon_Rate'] * dates.num_business_days(cs.initial_fixing_date, cs.final_fixing_date))
-            else: 
-                perf_lonza = lonza[-1]/ cs.initialS1
-                perf_sika = sika[-1]/cs.initialS2
-
+            if not barrierhit and not terminallower:  # Best case scenario
+                periods = get_number_of_coupon_periods(cs.initial_fixing_date, cs.final_fixing_date)
+                payoffs[i] = params['Denomination'] * (1 + params['Coupon_Rate'] * periods)
+            else:
+                # Worst-case scenario
+                perf_lonza = lonza.iloc[-1] / cs.initialS1
+                perf_sika = sika.iloc[-1] / cs.initialS2
                 worse_perf = min(perf_lonza, perf_sika)
+                periods = get_number_of_coupon_periods(cs.initial_fixing_date, cs.final_fixing_date)
                 payoffs[i] = params['Denomination'] * worse_perf
-                payoffs[i] += params['Denomination'] * params['Coupon_Rate'] * dates.num_business_days(cs.initial_fixing_date, cs.final_fixing_date)
+                payoffs[i] += params['Denomination'] * params['Coupon_Rate'] * periods
+
     return payoffs
 
 
