@@ -85,7 +85,7 @@ def autocall(sim : pd.DataFrame, earlyredemption: list) :
             earlyredemption = True 
     return earlyredemption
 
-def payoff(paths1, paths2 , params):
+def payoff(paths1, paths2 , params, fdos):
     """
     Takes in 1 simulated path of 2 assets and check if any of the barriers have been reached 
 
@@ -100,8 +100,8 @@ def payoff(paths1, paths2 , params):
     M = lonza_path.shape[1] # number of simulations 
     N = lonza_path.shape[0] - 1 # number of time steps 
     payoffs = np.zeros(M)
-    dt = cs.n_steps_per_year
-    for i in range(M): # iterating each simulation 
+    dt = cs.dt
+    for i in range(M): # for each simulation 
         early_redeem = False 
         lonza = lonza_path.iloc[:,i]
         sika = sika_path.iloc[:, i]
@@ -109,7 +109,7 @@ def payoff(paths1, paths2 , params):
             if (lonza.loc[t_dates] >= cs.initialS1 and sika.loc[t_dates] >= cs.initialS2):
                 # early redemption
                 early_redemption_date = dates.add_business_days(date= t_dates)
-                payoffs[i] = params['Denomination']* (1 + params['Coupon_Rate'] * dates.num_business_days(cs.initial_fixing_date, early_redemption_date))
+                payoffs[i] = params['Denomination']* (1 + params['Coupon_Rate'] * dates.num_business_days(fdos, early_redemption_date))
                 early_redeem = True 
                 break 
         if not early_redeem :
