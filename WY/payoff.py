@@ -71,25 +71,27 @@ def payoff(paths1, paths2, params, fdos):
         terminal_condition = (lonza.iloc[-1] < initialS1) or (sika.iloc[-1] < initialS2)
         return terminal_condition
 
-    lonza_path = paths1
-    sika_path = paths2
-    M = lonza_path.shape[1]  # Number of simulations
-    payoffs = np.zeros(M)
+     # Ensure columns are sorted if necessary
+    paths1 = paths1.reindex(sorted(paths1.columns), axis=1)
+    paths2 = paths2.reindex(sorted(paths2.columns), axis=1)
+    simulations = paths1.columns  # List of simulation names
 
-    for i in range(M):  # For each simulation
+    payoffs = []
+
+    for sim_name in simulations:
         early_redeem = False
-        lonza = lonza_path.iloc[:, i]
-        sika = sika_path.iloc[:, i]
+        lonza = paths1[sim_name]
+        sika = paths2[sim_name]
         early_observation_dates = dates.get_early_observation_dates(cs.initial_fixing_date, cs.final_fixing_date)
         
         for date_idx, t_date in enumerate(early_observation_dates):
             if (lonza.loc[t_date] >= cs.initialS1) and (sika.loc[t_date] >= cs.initialS2):
                 # Early redemption
-                # Assume settlement delay (e.g., 2 business days)
                 settlement_delay = params.get('Settlement_Delay', 2)
                 early_redemption_date = dates.add_business_days(t_date, settlement_delay)
                 periods = get_number_of_coupon_periods(fdos, early_redemption_date)
-                payoffs[i] = params['Denomination'] * (1 + params['Coupon_Rate'] * periods)
+                payoff_value = params['Denomination'] * (1 + params['Coupon_Rate'] * periods)
+                payoffs.append(payoff_value)
                 early_redeem = True
                 break  # Exit the early observation loop
 
@@ -99,16 +101,19 @@ def payoff(paths1, paths2, params, fdos):
 
             if not barrierhit and not terminallower:  # Best case scenario
                 periods = get_number_of_coupon_periods(cs.initial_fixing_date, cs.final_fixing_date)
-                payoffs[i] = params['Denomination'] * (1 + params['Coupon_Rate'] * periods)
+                payoff_value = params['Denomination'] * (1 + params['Coupon_Rate'] * periods)
+                payoffs.append(payoff_value)
             else:
                 # Worst-case scenario
                 perf_lonza = lonza.iloc[-1] / cs.initialS1
                 perf_sika = sika.iloc[-1] / cs.initialS2
                 worse_perf = min(perf_lonza, perf_sika)
                 periods = get_number_of_coupon_periods(cs.initial_fixing_date, cs.final_fixing_date)
-                payoffs[i] = params['Denomination'] * worse_perf
-                payoffs[i] += params['Denomination'] * params['Coupon_Rate'] * periods
+                payoff_value = params['Denomination'] * worse_perf
+                payoff_value += params['Denomination'] * params['Coupon_Rate'] * periods
+                payoffs.append(payoff_value)
 
+    payoffs = np.array(payoffs)
     return payoffs
 
 
