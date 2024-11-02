@@ -1,16 +1,19 @@
 import pandas as pd 
 import numpy as np 
-import GBM as gbm 
-import constants as cs 
-import Dates as dates
 import yfinance as yfin
-
+import numpy as np
+import scipy
+from scipy.stats import norm
+import MH4518.WY.Utils.constants as cs
+import MH4518.WY.Utils.Dates as dates 
+import MH4518.WY.Utils.payoff as pf
+import MH4518.WY.Utils.GBM as gbm
 
 
 
 def av():
     """
-    Constructs an antithetic variate estimator of sigma
+    Constructs an antithetic variate estimator of the p
     
     """
 
@@ -29,14 +32,29 @@ def european_option_on_minimum(S1_T, S2_T, K, r, T):
         T: Time to maturity in years
     '''
     min_ST = np.minimum(S1_T, S2_T)
-    payoff = np.maximum(min_ST - K, 0)
+    payoff = np.maximum(min_ST-K, 0)
     option_price = np.exp(-r * T) * payoff
     return option_price
 
+def european_option_on_average(S1_T, S2_T, K, r, T):
+    '''
+    Computes the discounted payoff of a European call option on the average price of two assets.
 
-import numpy as np
-import scipy
-from scipy.stats import norm
+    Params:
+        S1_T: Array of Lonza prices at maturity
+        S2_T: Array of Sika prices at maturity
+        K: Strike price
+        r: Interest rate
+        T: Time to maturity in years
+
+    Returns:
+        option_price: Array of discounted payoffs for each simulation
+    '''
+    avg_ST = 0.5 * (S1_T + S2_T)
+    payoff = np.maximum(avg_ST - K, 0)
+    option_price = np.exp(-r * T) * payoff
+    return option_price
+
 
 def analytical_price_option_on_minimum(S0_1, S0_2, K, r, T, sigma1, sigma2, rho, q1=0.77, q2=1.21):
     """
@@ -88,6 +106,34 @@ def analytical_price_option_on_minimum(S0_1, S0_2, K, r, T, sigma1, sigma2, rho,
 
 
 
+def european_option_on_average_price_analytical(S0_1, S0_2, K, r, T, sigma_1, sigma_2, rho, q=0.0):
+    '''
+    Approximates the analytical price of a European call option on the average price of two assets.
+
+    Params:
+        S0_1: Initial price of Lonza
+        S0_2: Initial price of Sika
+        K: Strike price
+        r: Risk-free interest rate
+        T: Time to maturity
+        sigma_1: Volatility of Lonza
+        sigma_2: Volatility of Sika
+        rho: Correlation between Lonza and Sika
+        q: Dividend yield (assumed zero)
+
+    Returns:
+        C_avg: Approximate analytical price of the option
+    '''
+    S_avg = 0.5 * (S0_1 + S0_2)
+    sigma_avg = 0.5 * np.sqrt(sigma_1**2 + sigma_2**2 + 2 * rho * sigma_1 * sigma_2)
+    d1 = (np.log(S_avg / K) + (r - q + 0.5 * sigma_avg**2) * T) / (sigma_avg * np.sqrt(T))
+    d2 = d1 - sigma_avg * np.sqrt(T)
+    C_avg = S_avg * np.exp(-q * T) * norm.cdf(d1) - K * np.exp(-r * T) * norm.cdf(d2)
+    return C_avg
+
+
+
+
 
 
 def cv(data, lonza_path: pd.DataFrame, sika_path: pd.DataFrame, fdos: pd.Timestamp, payoffs_gbm: np.ndarray):
@@ -98,10 +144,10 @@ def cv(data, lonza_path: pd.DataFrame, sika_path: pd.DataFrame, fdos: pd.Timesta
     # Time to maturity in years
     T = dates.num_business_days(fdos, cs.final_fixing_date) / 252
     # Define K
-    K = data.loc[fdos][0]  * 0.4 # Adjust index if necessary
+    K = 300 # Adjust index if necessary
 
     # Calculate control variate payoffs for all simulations
-    payoffs_control_variate = european_option_on_minimum(
+    payoffs_control_variate = european_option_on_average(
         S1_T=lonza_terminal,
         S2_T=sika_terminal,
         K=K,
@@ -127,17 +173,18 @@ def cv(data, lonza_path: pd.DataFrame, sika_path: pd.DataFrame, fdos: pd.Timesta
 
     # Calculate correlation
     rho = log_returns['LONN.SW'].corr(log_returns['SIKA.SW'])
+    S0_1 = lonza_path.iloc[0, 0]  # Assuming first simulation's initial price
+    S0_2 = sika_path.iloc[0, 0]   # Assuming first simulation's initial price
 
     # Compute E[Y] analytically
-    E_Y = analytical_price_option_on_minimum(
-        S0_1=lonza_path.iloc[0, 0],
-        S0_2=sika_path.iloc[0, 0],
-        K=K,
-        r=cs.interest_rate,
-        T=T,
-        sigma1=sigma1,
-        sigma2=sigma2,
-        rho=rho
+    E_Y = european_option_on_average_price_analytical(S0_1=S0_1, S0_2=S0_2,
+                                                      K = K, 
+                                                      r = cs.interest_rate,
+                                                      T = T, 
+                                                      sigma_1= sigma1,
+                                                      sigma_2= sigma2,
+                                                      rho = rho,
+                                                      q = 0.0113
     )
 
     print(f"E_Y (Analytical Expected Value): {E_Y}")
