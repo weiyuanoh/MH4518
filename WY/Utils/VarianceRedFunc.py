@@ -144,7 +144,7 @@ def cv(data, lonza_path: pd.DataFrame, sika_path: pd.DataFrame, fdos: pd.Timesta
     # Time to maturity in years
     T = dates.num_business_days(fdos, cs.final_fixing_date) / 252
     # Define K
-    K = 300 # Adjust index if necessary
+    K = 250 # Adjust index if necessary
 
     # Calculate control variate payoffs for all simulations
     payoffs_control_variate = european_option_on_average(
@@ -236,11 +236,113 @@ def imptsam():
     """
     pass 
 
-def emc():
+
+def restructure_simulated_paths(sim_T):
     """
-    Does Emprical Martingale Correction 
+    Restructure the MultiIndex DataFrame returned by multi_asset_gbm_n_sims
+    to a DataFrame with simulations as rows and assets as columns.
+
+    Params:
+        sim_T (pd.DataFrame): MultiIndex DataFrame with asset and simulation levels.
+
+    Returns:
+        terminal_prices (pd.DataFrame): DataFrame with simulations as index and assets as columns.
+    """
+    # Step 1: Select the terminal row (last date)
+    terminal_row = sim_T.iloc[-1]
     
+    # Step 2: Ensure columns are a MultiIndex
+    if not isinstance(terminal_row.index, pd.MultiIndex):
+        raise ValueError("Columns of sim_T must be a MultiIndex with levels [Asset, Simulation].")
+    
+    # Step 3: Convert the Series with MultiIndex to DataFrame
+    terminal_df = terminal_row.reset_index()
+    terminal_df.columns = ['Asset', 'Simulation', 'Price']
+    
+    # Step 4: Pivot the DataFrame to have Simulation as rows and Asset as columns
+    terminal_prices = terminal_df.pivot(index='Simulation', columns='Asset', values='Price')
+    
+    return terminal_prices
+
+
+
+def empirical_martingale_correction(simulated_paths, r, T, S0):
     """
-    pass 
+    Applies Empirical Martingale Correction to the simulated asset paths.
+
+    Params:
+        simulated_paths (pd.DataFrame): Simulated asset paths at maturity for all simulations.
+                                        Columns are asset names, rows are simulations.
+        r (float): Risk-free interest rate.
+        T (float): Time to maturity in years.
+        S0 (dict): Initial asset prices, e.g., {'LONN.SW': 549.60, 'SIKA.SW': 240.40}.
+
+    Returns:
+        correction_factors (dict): Correction factors for each asset.
+    """
+    correction_factors = {}
+    discount_factor = np.exp(-r * T)
+
+    for asset in simulated_paths.columns:
+        # Compute discounted simulated prices
+        discounted_S_T = discount_factor * simulated_paths[asset].values
+        # Empirical mean of discounted prices
+        empirical_mean = np.mean(discounted_S_T)
+        # Theoretical expectation
+        theoretical_mean = S0[asset]
+        # Correction factor
+        correction = empirical_mean - theoretical_mean
+        correction_factors[asset] = correction
+
+    return correction_factors
+
+def adjust_payoffs(payoffs, correction_factors):
+    """
+    Adjusts the original payoffs using the martingale correction factors.
+
+    Params:
+        payoffs (np.ndarray): Original array of payoffs from simulations.
+        correction_factors (dict): Correction factors for each asset.
+
+    Returns:
+        adjusted_payoffs (np.ndarray): Adjusted array of payoffs.
+    """
+    # Calculate average correction factor across assets
+    average_correction = np.mean(list(correction_factors.values()))
+    # Adjust payoffs
+    adjusted_payoffs = payoffs - average_correction
+    return adjusted_payoffs
+
+def EMC(fdos, params_product, sim_T, payoff_original ):
+    """
+    Processes a single FDOS: simulates paths, computes payoffs, applies EMC, and discounts to present value.
+
+    Params:
+        fdos: First date of simulation
+
+    Returns:
+        present_value: Discounted present value of adjusted payoffs
+    """
+    try:
+        # Restructure the simulated paths
+        terminal_prices = restructure_simulated_paths(sim_T)
+        
+        # Calculate original payoffs
+        
+        
+        # Compute correction factors
+        S0 = {'LONN.SW': 549.60, 'SIKA.SW': 240.40}  # Initial prices
+        # Ensure that 'T' is the time to maturity from 'fdos' to 'final_fixing_date'
+        T_discount = dates.num_business_days(fdos, cs.final_fixing_date) / 252  # Assuming 252 trading days
+        T = T_discount  # Time to maturity in years
+        correction_factors = empirical_martingale_correction(terminal_prices, cs.interest_rate, T, S0)
+        
+        # Adjust payoffs
+        adjusted_payoffs = adjust_payoffs(payoff_original, correction_factors)
+        
+        return adjusted_payoffs
+    except Exception as e:
+        print(f"Error processing FDOS {fdos}: {e}")
+        return np.nan  # Return NaN or handle as appropriate
 
 

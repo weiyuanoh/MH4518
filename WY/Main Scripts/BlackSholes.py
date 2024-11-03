@@ -84,7 +84,7 @@ if __name__ == '__main__':
     cs.n_sims = 1000  # Adjust as needed
 
     # Set up the multiprocessing pool
-    num_processes =max(mp.cpu_count(), 4)  # Adjust the number of processes
+    num_processes = min(mp.cpu_count(), 6)  # Adjust the number of processes
     with mp.Pool(processes=num_processes) as pool:
         # Map the function to the list of dates
         present_value_list = pool.map(process_fdos, T)
@@ -92,3 +92,14 @@ if __name__ == '__main__':
     # Optionally, process the results
     print("Present Value List:")
     print(present_value_list)
+
+    productprice = pp.get_product_price()
+    productprice
+    n=fig, ax = plt.subplots(figsize=(12, 6))
+    present_value_df = pd.DataFrame({'Avg Payoff': present_value_list}, index=T)
+    present_value_df.plot(ax = ax)
+
+
+
+    productprice.plot(ax =ax)
+    plt.show()
