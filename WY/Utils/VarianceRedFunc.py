@@ -193,7 +193,7 @@ def cv(data, lonza_path: pd.DataFrame, sika_path: pd.DataFrame, fdos: pd.Timesta
     # Compute sample means
     mean_X = np.mean(payoffs_gbm)
     mean_Y = np.mean(payoffs_control_variate)
-    print(f"Mean of Simulated Control Variate Payoffs (bar_Y): {mean_Y}")
+
     # Compute covariance and variance
     cov_matrix = np.cov(payoffs_gbm, payoffs_control_variate, ddof=1)
     cov_XY = cov_matrix[0, 1]
@@ -208,12 +208,6 @@ def cv(data, lonza_path: pd.DataFrame, sika_path: pd.DataFrame, fdos: pd.Timesta
 
     # Compute control variate estimator
     theta_CV = mean_X + beta * (E_Y - mean_Y)
-    
-
-    print("NaN in payoffs_gbm:", np.isnan(payoffs_gbm).any())
-    print("Inf in payoffs_gbm:", np.isinf(payoffs_gbm).any())
-    print("NaN in payoffs_control_variate:", np.isnan(payoffs_control_variate).any())
-    print("Inf in payoffs_control_variate:", np.isinf(payoffs_control_variate).any())
 
 
     # Variance reduction estimation
@@ -248,18 +242,18 @@ def restructure_simulated_paths(sim_T):
     Returns:
         terminal_prices (pd.DataFrame): DataFrame with simulations as index and assets as columns.
     """
-    # Step 1: Select the terminal row (last date)
+    # Select the terminal row (last date)
     terminal_row = sim_T.iloc[-1]
     
-    # Step 2: Ensure columns are a MultiIndex
+    # Ensure columns are a MultiIndex
     if not isinstance(terminal_row.index, pd.MultiIndex):
         raise ValueError("Columns of sim_T must be a MultiIndex with levels [Asset, Simulation].")
     
-    # Step 3: Convert the Series with MultiIndex to DataFrame
+    # Convert the Series with MultiIndex to DataFrame
     terminal_df = terminal_row.reset_index()
     terminal_df.columns = ['Asset', 'Simulation', 'Price']
     
-    # Step 4: Pivot the DataFrame to have Simulation as rows and Asset as columns
+    # Pivot the DataFrame to have Simulation as rows and Asset as columns
     terminal_prices = terminal_df.pivot(index='Simulation', columns='Asset', values='Price')
     
     return terminal_prices
