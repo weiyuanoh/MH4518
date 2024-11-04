@@ -43,3 +43,14 @@ def get_product_price():
         productprice = productprice['value'] * 10
 
     return productprice
+
+
+# read interest functions 
+def read_hist_rates():
+    swiss_1_week = pd.read_csv(r"C:\Users\Espietsp\PycharmProjects\Simulation Techniques\.venv\MH4518\WY\Data\Switzerland 1-Week Bond Yield Historical Data (2).csv")
+    swiss_1_month = pd.read_csv(r"C:\Users\Espietsp\PycharmProjects\Simulation Techniques\.venv\MH4518\WY\Data\Switzerland 1-Month Bond Yield Historical Data.csv")
+    swiss_2_month = pd.read_csv(r"C:\Users\Espietsp\PycharmProjects\Simulation Techniques\.venv\MH4518\WY\Data\Switzerland 2-Month Bond Yield Historical Data.csv")
+    swiss_6_month = pd.read_csv(r"C:\Users\Espietsp\PycharmProjects\Simulation Techniques\.venv\MH4518\WY\Data\Switzerland 6-Month Bond Yield Historical Data.csv")
+    swiss_1_year = pd.read_csv(r"C:\Users\Espietsp\PycharmProjects\Simulation Techniques\.venv\MH4518\WY\Data\Switzerland 1-Year Bond Yield Historical Data.csv")
+    combined = pd.concat([swiss_1_week["Price"], swiss_1_month["Price"], swiss_2_month["Price"], swiss_6_month["Price"], swiss_1_year["Price"]], axis = 1)
+    return combined
