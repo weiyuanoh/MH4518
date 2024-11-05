@@ -9,7 +9,7 @@ def get_product_price():
     params = {
         'instrumentID': '483328',
         'fromDate': '2023-04-27',
-        'toDate': '2024-07-30',
+        'toDate': '2024-07-30',  # Ensure this date is not in the future relative to today's date
         'chartType': 'line',  # Example parameter
         # Include other parameters as needed
     }
@@ -17,33 +17,52 @@ def get_product_price():
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
         'Accept': 'application/json, text/javascript, */*; q=0.01',
-        'Referer': 'https://derivative.credit-suisse.com/',  # Include if necessary
+        'Referer': 'https://derivative.credit-suisse.com/ch/ch/en/detail/autocallable-brc-lonza-sika-8-00-p-a/CH1253871557/125387155',  # Include if necessary
         'X-Requested-With': 'XMLHttpRequest',  # Indicates an AJAX request
     }
 
     cookies = {
-        'Cookie' : 'JURISDICTION=ch; COUNTRY=ch; LANGUAGE=en; CFCLIENT_DERIVATIVE_4_0=""; CFID=4246488; CFTOKEN=35178305; CFGLOBALS=urltoken%3DCFID%23%3D4246488%26CFTOKEN%23%3D35178305%23lastvisit%3D%7Bts%20%272024%2D11%2D01%2007%3A36%3A06%27%7D%23hitcount%3D37%23timecreated%3D%7Bts%20%272024%2D10%2D28%2010%3A49%3A51%27%7D%23cftoken%3D35178305%23cfid%3D4246488%23'
+        'Cookie' : 'JURISDICTION=ch; COUNTRY=ch; LANGUAGE=en; CFCLIENT_DERIVATIVE_4_0=""; CFID=4342638; CFTOKEN=47971302; CFGLOBALS=urltoken%3DCFID%23%3D4342638%26CFTOKEN%23%3D47971302%23lastvisit%3D%7Bts%20%272024%2D11%2D05%2006%3A47%3A56%27%7D%23hitcount%3D55%23timecreated%3D%7Bts%20%272024%2D10%2D28%2010%3A49%3A51%27%7D%23cftoken%3D47971302%23cfid%3D4342638%23'
     }
 
-
-    response = requests.get( api_url, params= params, headers = headers, cookies= cookies )
-
+    try:
+        response = requests.get(api_url, params=params, headers=headers, cookies=cookies, timeout=10)
+    except requests.exceptions.RequestException as e:
+        print(f"Request failed: {e}")
+        return None
 
     if response.status_code == 200:
-        # Parse the JSON response
-        data = response.json()
+        try:
+            # Attempt to parse JSON
+            data = response.json()
+        except json.JSONDecodeError as e:
+            print("JSON decoding failed. Response content:")
+            print(response.text)  # Print the response text for debugging
+            return None
 
         # Convert to DataFrame
-        productprice = pd.DataFrame(data)
+        if isinstance(data, list) or isinstance(data, dict):
+            productprice = pd.DataFrame(data)
+        else:
+            print("Unexpected JSON structure:", type(data))
+            return None
 
         # Process the DataFrame as needed
-        productprice['date'] = pd.to_datetime(productprice['date'])
-        productprice.sort_values('date', inplace=True)
-        productprice.index = productprice['date']
-        productprice = productprice['value'] * 10
+        if 'date' in productprice.columns and 'value' in productprice.columns:
+            productprice['date'] = pd.to_datetime(productprice['date'])
+            productprice.sort_values('date', inplace=True)
+            productprice.set_index('date', inplace=True)
+            productprice = productprice['value'] * 10
+        else:
+            print("Expected columns 'date' and 'value' not found in the data.")
+            return None
 
-    return productprice
-
+        return productprice
+    else:
+        print(f"Failed to retrieve data. Status code: {response.status_code}")
+        print("Response content:")
+        print(response.text)  # Print the response text for debugging
+        return None
 
 # read interest functions 
 def read_hist_rates():

@@ -60,6 +60,7 @@ def process_fdos(args):
         
         # 2. Control Variate Payoff
         payoff_cv = vr.cv(data=data, lonza_path=lonza_path, sika_path=sika_path, fdos=fdos, payoffs_gbm=payoff_mc)
+        payoff_cv2 = vr.cv2(payoff_gbm= payoff_mc, data = data, fdos= fdos)
         
         # 4. Empirical Martingale Correction Payoff
         # Assuming vr.emc is your Empirical Martingale Correction function
@@ -67,7 +68,7 @@ def process_fdos(args):
         
         # Compute expected payoffs
         expected_payoff_mc = np.mean(payoff_mc)
-        expected_payoff_cv = np.mean(payoff_cv)
+        expected_payoff_cv = np.mean(payoff_cv2)
         expected_payoff_EMC = np.mean(payoff_EMC)
         
         # Discount to present value (assuming present value as of fdos)

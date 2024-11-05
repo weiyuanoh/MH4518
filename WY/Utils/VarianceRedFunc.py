@@ -220,8 +220,42 @@ def cv(data, lonza_path: pd.DataFrame, sika_path: pd.DataFrame, fdos: pd.Timesta
     return theta_CV
 
 
+def cv2(payoff_gbm, data: pd.DataFrame, fdos):
+    '''
+    Takes in simulated payoff_gbm.
+    E_Y is the mean of Lonza for a new set of randomness 
+    
+    Params:
+        lonza_path: dataframe of lonza paths on the cs.initial_fixing_date for n sims
+    
+    '''
+    sim_extra = gbm.multi_asset_gbm_n_sims(plot= False, plotasset= False, nsims=100, data=data, fdos = fdos) #new lonza set of randomness 
+    lonza_path_new = sim_extra['LONN.SW']
+    lonza_path_new_tail = lonza_path_new.iloc[-1].values
 
-     
+    mean_X = np.mean(payoff_gbm)
+    E_Y = np.mean(lonza_path_new_tail)
+    mean_Y = np.mean(lonza_path_new_tail)
+
+    var_X = np.var(payoff_gbm, ddof = 1)
+    var_Y = np.var(lonza_path_new_tail, ddof = 1)
+    cov_matrix = np.cov(payoff_gbm, lonza_path_new_tail, ddof=1)
+    cov_XY = cov_matrix[0,1]
+
+    corr_XY =   cov_XY / np.sqrt(var_X * var_Y)  
+    print(f"Correlation between X and Y: {corr_XY:.4f}") 
+    beta = cov_XY / var_Y
+    print(f"Beta (β) Coefficient: {beta}")
+        # Compute control variate estimator
+    theta_CV = mean_X + beta * (E_Y - mean_Y)
+
+    var_theta_CV = var_X - (cov_XY ** 2) / var_Y
+    variance_reduction = (var_X - var_theta_CV) / var_X * 100
+    print(f"Variance Reduction Achieved: {variance_reduction:.2f}%")
+    print("CV Estimate Payoff :", theta_CV)
+    return theta_CV
+
+
 
 def imptsam():
     """

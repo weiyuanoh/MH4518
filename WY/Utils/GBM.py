@@ -13,9 +13,7 @@ def multi_asset_gbm(data: pd.DataFrame, fdos, nsims: int) -> pd.DataFrame:
     """
     Simulates multiple asset paths under the risk-neutral measure using GBM for multiple simulations.
     """
-    import numpy as np
-    import pandas as pd
-    
+
     try:
         # Prepare the log returns DataFrame
         log_returns_df = pd.DataFrame()
@@ -94,8 +92,6 @@ def multi_asset_gbm(data: pd.DataFrame, fdos, nsims: int) -> pd.DataFrame:
         raise
         
     return sim_data
-    
-    return sim_data
 
 
 
@@ -115,8 +111,6 @@ def multi_asset_gbm_n_sims(plot: bool, plotasset: bool, nsims: int, data: pd.Dat
         sim_data: DataFrame containing simulated asset prices for all simulations.
                   Columns are MultiIndex with levels ('Asset', 'Simulation')
     """
-    import matplotlib.pyplot as plt
-    import pandas as pd
 
     # Get the list of dates for the simulation period
     date_list = dates.get_list_dates(fdos, cs.final_fixing_date)
