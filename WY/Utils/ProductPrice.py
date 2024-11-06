@@ -73,3 +73,11 @@ def read_hist_rates():
     swiss_1_year = pd.read_csv(r"C:\Users\Espietsp\PycharmProjects\Simulation Techniques\.venv\MH4518\WY\Data\Switzerland 1-Year Bond Yield Historical Data.csv")
     combined = pd.concat([swiss_1_week["Price"], swiss_1_month["Price"], swiss_2_month["Price"], swiss_6_month["Price"], swiss_1_year["Price"]], axis = 1)
     return combined
+
+def product_price():
+    productprice = pd.read_json(r'C:\Users\Admin\PycharmProjects\Simulation Techniques in Finance\.venv\MH4518\WY\Data\ProductPrice.json')
+    productprice['date'] = pd.to_datetime(productprice['date'])
+    productprice.sort_values('date', inplace=True)
+    productprice.set_index('date', inplace=True)
+    productprice = productprice['value'] * 10
+    return productprice

@@ -114,21 +114,21 @@ def simulate_vasicek(a, b, sigma, r0, T, dt, N_simulations):
     - r_paths: Simulated interest rate paths (N_simulations x N_steps)
     """
     N_steps = int(T / dt)
-    time_grid = np.linspace(0, T, N_steps + 1)
-    r_paths = np.zeros((N_simulations, N_steps + 1))
+    time_grid = np.linspace(0, T, N_steps)
+    r_paths = np.zeros((N_simulations, N_steps))
     r_paths[:, 0] = r0
     
-    for t in range(1, N_steps + 1):
+    dates = pd.date_range(cs.initial_fixing_date, cs.final_fixing_date)
+    for t in range(1, N_steps):
         dr = a * (b - r_paths[:, t-1]) * dt + sigma * np.sqrt(dt) * np.random.randn(N_simulations)
         r_paths[:, t] = r_paths[:, t-1] + dr
     
     return time_grid, r_paths
-
 a_calibrated = calibrated_params['a']
 b_calibrated = calibrated_params['b']
 sigma_r_calibrated = calibrated_params['sigma']
 
-time_grid, r_paths = simulate_vasicek(a_calibrated, b_calibrated, sigma_r_calibrated, 0.015, 1.25, 1/365, 1000)
+time_grid, r_paths = simulate_vasicek(a_calibrated, b_calibrated, sigma_r_calibrated, 0.015, (461/365), 1/365, 1000)
 
 
 def plot_vasicek_matplotlib(time_grid, r_paths, num_paths=1000):
@@ -163,9 +163,9 @@ from dateutil.relativedelta import relativedelta
 
 # Dates Formatting
 initial_date = cs.initial_fixing_date
-new_date = initial_date + relativedelta(years=1, months=3)
+new_date = initial_date + relativedelta(years=1, months=3, days = 3)
 r_paths = pd.DataFrame(r_paths).T
-dates_index= pd.date_range(cs.initial_fixing_date, new_date, inclusive='left')
+dates_index= pd.date_range(cs.initial_fixing_date, new_date)
 r_paths.index = dates_index
 
 
@@ -277,12 +277,12 @@ def multi_asset_gbm_div_interest(data: pd.DataFrame, fdos, nsims: int, r_paths) 
                 drift + vol_vector * epsilon[t - 1]
             )
             if t in dividend_steps_lonza:
-                asset_idx = cs.ticker_list.index('Lonza')  # Get the index of Lonza in the asset list
+                asset_idx = cs.ticker_list.index('LONN.SW')  # Get the index of Lonza in the asset list
                 dividend_amount = dividend_steps_lonza[t]
                 S[t, :, asset_idx] -= dividend_amount  # Subtract dividend
 
             if t in dividend_steps_sika:
-                asset_idx = cs.ticker_list.index('Sika')  # Get the index of Sika in the asset list
+                asset_idx = cs.ticker_list.index('SIKA.SW')  # Get the index of Sika in the asset list
                 dividend_amount = dividend_steps_sika[t]
                 S[t, :, asset_idx] -= dividend_amount  # Subtract dividend
         
@@ -313,6 +313,69 @@ def multi_asset_gbm_div_interest(data: pd.DataFrame, fdos, nsims: int, r_paths) 
         
     return sim_data 
 
+def multi_asset_gbm_n_sims(plot: bool, plotasset: bool, nsims: int, data: pd.DataFrame, fdos) -> pd.DataFrame:
+    """
+    Simulate multiple asset paths under the GBM model for 'nsims' simulations starting from 'fdos'.
+
+    Params:
+        plot (bool): Whether to plot the combined simulations.
+        plotasset (bool): Whether to plot the simulations for each asset separately.
+        nsims (int): Number of simulations to run.
+        data (pd.DataFrame): Historical data for assets.
+        fdos: First date of simulation.
+
+    Returns:
+        sim_data: DataFrame containing simulated asset prices for all simulations.
+                  Columns are MultiIndex with levels ('Asset', 'Simulation')
+    """
+
+    # Get the list of dates for the simulation period
+    date_list = dates.get_list_dates(fdos, cs.final_fixing_date)
+    
+    # Realized price from initial fixing date to final fixing date
+    realised_price = data.loc[cs.initial_fixing_date: cs.final_fixing_date]
+    
+    try:
+        # Run the simulation
+        sim_data = multi_asset_gbm_div_interest(data, fdos, nsims, r_paths)
+        sim_data.index = date_list
+        
+    except Exception as e:
+        raise Exception("Error during simulation") from e
+
+    if plot:
+        fig, ax = plt.subplots(figsize=(12, 6))
+        # Plot the realized prices
+        realised_price.plot(ax=ax, linewidth=2)
+        # Plot the simulated paths
+        for asset in cs.ticker_list:
+            asset_columns = sim_data[asset]
+            asset_columns.plot(ax=ax, alpha=0.4, legend=False)
+        plt.title('Simulated Paths with Realized Prices')
+        plt.xlabel('Date')
+        plt.ylabel('Price')
+        plt.grid(True)
+        plt.show()
+
+    if plotasset:
+        for asset in cs.ticker_list:
+            # Select columns for the asset
+            asset_columns = sim_data[asset]
+            # Select the realized price for the asset
+            realised_price_asset = realised_price[asset]  # Adjust the column name if necessary
+
+            # Plot asset paths and realized price
+            fig, ax = plt.subplots(figsize=(12, 6))
+            asset_columns.plot(ax=ax, alpha=0.4, legend=False)
+            realised_price_asset.plot(ax=ax, color='black', linewidth=2, label=f'Realized Price {asset}')
+            ax.legend()
+            plt.title(f'{asset} Paths under Multi Asset GBM')
+            plt.xlabel('Date')
+            plt.ylabel('Price')
+            plt.grid(True)
+            plt.show()
+            
+    return sim_data
 
 
 params_product = {
@@ -336,13 +399,12 @@ def process_fdos(args):
         # Alternatively, pass them as arguments or load them within the function
 
         # Run the simulation
-        sim_T = gbm.multi_asset_gbm_n_sims(
-            plot=False,
-            plotasset=False,
-            nsims=cs.n_sims,
-            data=data,
-            fdos=fdos
-        )
+        sim_T = multi_asset_gbm_n_sims(plot = False,
+                                       plotasset=False,
+                                       nsims = cs.n_sims,
+                                       data = data, 
+                                       fdos = fdos)
+        
         # Extract asset paths
         lonza_path = sim_T['LONN.SW']
         sika_path = sim_T['SIKA.SW']
@@ -366,12 +428,12 @@ if __name__ == '__main__':
     date_list = dates.get_list_dates(cs.initial_fixing_date, cs.final_fixing_date)
     date_list = pd.Series(date_list).tolist()
     # For testing, limit the number of dates
-    date_list = date_list[:5]  # Remove or adjust this line in production
+    # date_list = date_list[:5]  # Remove or adjust this line in production
 
     T = date_list
 
     # Use a smaller number of simulations for testing
-    cs.n_sims = 10 # Adjust as needed
+    cs.n_sims = 1000 # Adjust as needed
 
     # Set up the multiprocessing pool
     num_processes = min(mp.cpu_count(), 6)  # Adjust the number of processes
@@ -383,8 +445,8 @@ if __name__ == '__main__':
     print("Present Value List:")
     print(present_value_list)
 
-    productprice = pp.get_product_price()
-    productprice
+    productprice = pp.product_price()
+
     n=fig, ax = plt.subplots(figsize=(12, 6))
     present_value_df = pd.DataFrame({'Avg Payoff': present_value_list}, index=T)
     present_value_df.plot(ax = ax)
