@@ -169,7 +169,7 @@ dates_index= pd.date_range(cs.initial_fixing_date, new_date, inclusive='left')
 r_paths.index = dates_index
 
 
-def multi_asset_gbm(data: pd.DataFrame, fdos, nsims: int, r_paths) -> pd.DataFrame:
+def multi_asset_gbm_div_interest(data: pd.DataFrame, fdos, nsims: int, r_paths) -> pd.DataFrame:
     """
     Simulates multiple asset paths under the risk-neutral measure using GBM for multiple simulations.
     """
@@ -221,12 +221,70 @@ def multi_asset_gbm(data: pd.DataFrame, fdos, nsims: int, r_paths) -> pd.DataFra
         # Initialize array to hold simulated prices
         S = np.zeros((num_steps, nsims, num_assets))  # Shape: (num_steps, nsims, num_assets)
         S[0, :, :] = s0_vector  # Set initial prices for all simulations
+
+# Initialize Dividend Search Dictionaries
+        lonza_dividend_search = {
+            pd.Timestamp('2023-05-11'): 3.50,
+            pd.Timestamp('2024-05-15'): 4.00
+        }
+        
+        sika_dividend_search = {
+            pd.Timestamp('2024-04-03'): 3.30
+        }
+        
+        # Create Date-to-Step Mapping
+        date_to_step = {date: idx for idx, date in enumerate(date_list)}
+        
+        # Function to find simulation step for a dividend date
+        def find_simulation_step(dividend_date, date_list, date_to_step):
+            """
+            Finds the simulation step (index) for a given dividend date.
+            If the exact date isn't present, adjusts to the next available simulation date.
+            """
+            if dividend_date in date_to_step:
+                return date_to_step[dividend_date]
+            else:
+                # Find the next date in date_list after dividend_date
+                future_dates = [d for d in date_list if d > dividend_date]
+                if future_dates:
+                    nearest_date = future_dates[0]
+                    return date_to_step[nearest_date]
+                else:
+                    # If no future date is found, return None or handle accordingly
+                    return None
+        
+        # Convert Lonza Dividend Dates
+        dividend_steps_lonza = {}
+        for date, amount in lonza_dividend_search.items():
+            step = find_simulation_step(date, date_list, date_to_step)
+            if step is not None:
+                dividend_steps_lonza[step] = amount
+            else:
+                print(f"Dividend date {date.date()} for Lonza not found in simulation dates.")
+        
+        # Convert Sika Dividend Dates
+        dividend_steps_sika = {}
+        for date, amount in sika_dividend_search.items():
+            step = find_simulation_step(date, date_list, date_to_step)
+            if step is not None:
+                dividend_steps_sika[step] = amount
+            else:
+                print(f"Dividend date {date.date()} for Sika not found in simulation dates.")
         
         # Simulate asset prices
         for t in range(1, num_steps):
             S[t] = S[t - 1] * np.exp(
                 drift + vol_vector * epsilon[t - 1]
             )
+            if t in dividend_steps_lonza:
+                asset_idx = cs.ticker_list.index('Lonza')  # Get the index of Lonza in the asset list
+                dividend_amount = dividend_steps_lonza[t]
+                S[t, :, asset_idx] -= dividend_amount  # Subtract dividend
+
+            if t in dividend_steps_sika:
+                asset_idx = cs.ticker_list.index('Sika')  # Get the index of Sika in the asset list
+                dividend_amount = dividend_steps_sika[t]
+                S[t, :, asset_idx] -= dividend_amount  # Subtract dividend
         
         # Transpose S to shape (num_steps, num_assets, nsims)
         S_transposed = S.transpose(0, 2, 1)  # Swap axes 1 and 2
@@ -308,12 +366,12 @@ if __name__ == '__main__':
     date_list = dates.get_list_dates(cs.initial_fixing_date, cs.final_fixing_date)
     date_list = pd.Series(date_list).tolist()
     # For testing, limit the number of dates
-    #date_list = date_list[:5]  # Remove or adjust this line in production
+    date_list = date_list[:5]  # Remove or adjust this line in production
 
     T = date_list
 
     # Use a smaller number of simulations for testing
-    cs.n_sims = 1000 # Adjust as needed
+    cs.n_sims = 10 # Adjust as needed
 
     # Set up the multiprocessing pool
     num_processes = min(mp.cpu_count(), 6)  # Adjust the number of processes

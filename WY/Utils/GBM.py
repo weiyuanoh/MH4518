@@ -93,6 +93,17 @@ def multi_asset_gbm(data: pd.DataFrame, fdos, nsims: int) -> pd.DataFrame:
         
     return sim_data
 
+def multi_asset_gbm_div(data:pd.DataFrame, fdos: pd.Timestamp):
+    '''
+    Attempts to adjust for asset dividends 
+    
+    Params:
+        data: Historical Data
+        fdos: First day of simulation
+    
+    
+    '''
+
 
 
 
