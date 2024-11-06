@@ -61,6 +61,7 @@ rho_assets = np.array([
     [0.4250732997428952, 1]
 ])
 
+
 # Simulation parameters
 T = 1.25  # Time to maturity (15 months)
 N = 314  # Number of time steps (daily steps over 15 months)
@@ -151,14 +152,13 @@ def simulate_heston_multidim(S0, V0, mu, kappa, theta, sigma_v, rho, rho_assets,
     return S, V, time_grid
 
 
-def get_sliding_window_params_constant_rate(data, i, total_days=314, window_size=252, fixed_rate=Constants.fixed_interest_rate):
+def get_sliding_window_params_constant_rate(data, i, window_size=252, fixed_rate=Constants.fixed_interest_rate):
     """
     Extract parameters for the sliding window simulation with a constant interest rate.
 
     Params:
         data: Historical asset data (DataFrame)
         i: Current window index
-        total_days: Total number of days in the simulation
         window_size: Size of each sliding window
         fixed_rate: Constant interest rate (e.g., 0.018)
 
@@ -169,8 +169,8 @@ def get_sliding_window_params_constant_rate(data, i, total_days=314, window_size
         S0_window: Initial asset prices at the end of the window
         r_window: Fixed interest rate
     """
-    start_idx = max(0, total_days - window_size - i)
-    end_idx = total_days - i
+    start_idx = i
+    end_idx = i + window_size
     window_data = data.iloc[start_idx:end_idx]
 
     # Set fixed interest rate
@@ -178,7 +178,7 @@ def get_sliding_window_params_constant_rate(data, i, total_days=314, window_size
 
     # Proceed with calculations
     log_returns = np.log(window_data / window_data.shift(1)).dropna()
-    drift = log_returns.mean().values  # This could be unused or could be set to fixed rate
+    drift = log_returns.mean().values  # Could be set to fixed rate if desired
     sigma = log_returns.std().values * np.sqrt(252)
     corr_matrix = log_returns.corr().values
 
@@ -213,23 +213,40 @@ def calculate_payoff_vectorized(paths, initial_investment, initpriceS1=Constants
     # Initialize payoffs
     payoffs = np.zeros(paths.shape[0])
 
+    # Define the interest factor correctly
+    interest_factor = (1 + (Constants.fixed_interest_rate / 12 * 15))  # 1 + (0.018 / 12 * 15) = 1.0225
+
     # Case 1: condA or condB
     case1 = condA | condB
-    payoffs[case1] = (1 + (0.08 / 12 * 15)) * initial_investment + initial_investment
+    payoffs[case1] = interest_factor * initial_investment  # 1.0225 * 1000 = 1022.5 CHF
 
     # Case 2: Not condA and not condB
     case2 = ~condA & ~condB
     # Determine which asset to use for conversion
     use_S1 = terminalS1 <= terminalS2
-    conversion_ratios = np.where(use_S1, conversionratioS1, conversionratioS2)
-    # Apply conversion ratios only to case2 indices
-    payoffs[case2] = (1 + (0.08 / 12 * 15)) * initial_investment + initial_investment * conversion_ratios[case2]
+
+    # Calculate number of shares initially held
+    num_shares_S1 = initial_investment / initpriceS1
+    num_shares_S2 = initial_investment / initpriceS2
+
+    # Apply conversion ratios to the number of shares
+    num_converted_S1 = num_shares_S1 * conversionratioS1
+    num_converted_S2 = num_shares_S2 * conversionratioS2
+
+    # Select conversion ratios based on which asset to use
+    num_converted = np.where(use_S1, num_converted_S1, num_converted_S2)
+
+    # Calculate the converted investment value at terminal prices
+    converted_value = np.where(use_S1, num_converted * terminalS1, num_converted * terminalS2)
+
+    # Assign payoffs for Case 2 (ONLY the converted value, not adding initial investment)
+    payoffs[case2] = converted_value[case2]
 
     # Case 3: Any asset reaches zero
     zero_S1 = (paths[:, :, 0] == 0).any(axis=1)
     zero_S2 = (paths[:, :, 1] == 0).any(axis=1)
     case3 = zero_S1 | zero_S2
-    payoffs[case3] = (1 + (0.08 / 12 * 15)) * initial_investment
+    payoffs[case3] = interest_factor * initial_investment  # 1022.5 CHF
 
     return payoffs
 
@@ -263,9 +280,9 @@ def monte_carlo_simulation_with_sliding_window_heston_constant_rate(S0, data, to
 
     for i in range(num_windows):
         drift, sigma, corr_matrix, S0_window, r_window = get_sliding_window_params_constant_rate(
-            data, i, total_days, window_size, fixed_rate
+            data, i, window_size, fixed_rate
         )
-        T = window_size / 252
+        T = window_size / 252  # Adjusted to window_size
 
         # Heston Model
         S_heston, V_heston, time_grid_heston = simulate_heston_multidim(
@@ -301,7 +318,6 @@ def monte_carlo_simulation_with_sliding_window_heston_constant_rate(S0, data, to
         'payoffs_heston': payoffs_heston_all,
         'std_heston': std_heston_all
     }
-
 
 # Run the simulation with confidence intervals
 logging.info("Starting Monte Carlo simulation with sliding windows (Heston Model Only, Constant Rate)...")
@@ -348,4 +364,3 @@ plt.grid(True)
 plt.tight_layout()
 plt.xticks(rotation=45)
 plt.show()
-
