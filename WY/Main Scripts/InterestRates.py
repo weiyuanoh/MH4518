@@ -210,6 +210,7 @@ def multi_asset_gbm_div_interest(data: pd.DataFrame, fdos, nsims: int, r_paths) 
         # Precompute drift terms
         r = np.mean(r_paths.loc[fdos])
         drift = (r - 0.5 * vol_vector ** 2) * dt  # Shape: (num_assets,)
+        drift_rnv = (r) * dt  # risk neutral drift
         
         # Generate random variables
         Z = np.random.normal(size=(num_steps - 1, nsims, num_assets))  # Shape: (num_steps-1, nsims, num_assets)
@@ -274,7 +275,7 @@ def multi_asset_gbm_div_interest(data: pd.DataFrame, fdos, nsims: int, r_paths) 
         # Simulate asset prices
         for t in range(1, num_steps):
             S[t] = S[t - 1] * np.exp(
-                drift + vol_vector * epsilon[t - 1]
+                drift_rnv + vol_vector * epsilon[t - 1]
             )
             if t in dividend_steps_lonza:
                 asset_idx = cs.ticker_list.index('LONN.SW')  # Get the index of Lonza in the asset list

@@ -91,3 +91,17 @@ def business_days_in_quarter(start_date: pd.Timestamp, end_date: pd.Timestamp):
     num_business_days = len(trading_days)
 
     return num_business_days
+
+def add_h_business_days(date: pd.Timestamp, h:int):
+    '''
+    Adds h number of days to a specified date. 
+    '''
+    six_cal = cal.get_calendar('SIX')
+    valid_days = six_cal.valid_days(start_date=date, end_date=date + pd.Timedelta(days=h*2))
+    
+ 
+    if len(valid_days) < h:
+        raise ValueError("Not enough trading days in the given range.")
+    
+
+    return valid_days[h - 1].tz_localize(None)

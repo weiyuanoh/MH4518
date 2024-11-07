@@ -48,6 +48,7 @@ def multi_asset_gbm(data: pd.DataFrame, fdos, nsims: int) -> pd.DataFrame:
         
         # Precompute drift terms
         drift = (cs.interest_rate - 0.5 * vol_vector ** 2) * dt  # Shape: (num_assets,)
+        drift_rnv = (cs.interest_rate) * dt  # risk neutral drift
         
         # Generate random variables
         Z = np.random.normal(size=(num_steps - 1, nsims, num_assets))  # Shape: (num_steps-1, nsims, num_assets)
@@ -63,7 +64,7 @@ def multi_asset_gbm(data: pd.DataFrame, fdos, nsims: int) -> pd.DataFrame:
         # Simulate asset prices
         for t in range(1, num_steps):
             S[t] = S[t - 1] * np.exp(
-                drift + vol_vector * epsilon[t - 1]
+                drift_rnv + vol_vector * epsilon[t - 1]
             )
         
         # Transpose S to shape (num_steps, num_assets, nsims)
