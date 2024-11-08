@@ -33,15 +33,15 @@ class Constants:
 cs = Constants()
 
 # Load actual price data for Lonza (Asset 1)
-lonza_price_df = pd.read_csv('/Users/guanjuwang/Desktop/TAN /MH4518/lonza_price_60.csv')
+lonza_price_df = pd.read_csv('/Users/guanjuwang/Desktop/TAN /MH4518/lonza_price_90.csv')
 # Load actual price data for Sika (Asset 2)
-sika_price_df = pd.read_csv('/Users/guanjuwang/Desktop/TAN /MH4518/sika_price_60.csv')
+sika_price_df = pd.read_csv('/Users/guanjuwang/Desktop/TAN /MH4518/sika_price_90.csv')
 # For Lonza
-lonza_price_df['Date'] = pd.to_datetime(lonza_price_df['Date'],format = '%m/%d/%y')
+lonza_price_df['Date'] = pd.to_datetime(lonza_price_df['Date'],format = '%Y-%m-%d')
 lonza_price_df.set_index('Date', inplace=True)
 lonza_price_df.rename(columns={'Close': 'S1'}, inplace=True)
 # For Sika
-sika_price_df['Date'] = pd.to_datetime(sika_price_df['Date'],format = '%m/%d/%y')
+sika_price_df['Date'] = pd.to_datetime(sika_price_df['Date'],format = '%Y-%m-%d')
 sika_price_df.set_index('Date', inplace=True)
 sika_price_df.rename(columns={'Close': 'S2'}, inplace=True)
 # Keep only the 'S1' column for Lonza and 'S2' column for Sika
@@ -51,13 +51,13 @@ sika_price_df = sika_price_df[['S2']]
 actual_prices_df = lonza_price_df.join(sika_price_df, how='inner')
 # Combine the two DataFrames on the Date index
 actual_prices_df = lonza_price_df.join(sika_price_df, how='inner')
-last_60_days = lonza_price_df.index[-60:]
+last_90_days = lonza_price_df.index[-90:]
 # Convert each element to a date object (list of dates)
-last_60_days = pd.to_datetime(last_60_days)
+last_90_days = pd.to_datetime(last_90_days)
 
 
 num_simulations = 1000
-num_days = len(last_60_days)
+num_days = len(last_90_days)
 num_assets = 2  # Two assets
 
 
@@ -119,12 +119,12 @@ full_price_paths_S2 = []
 full_dates = []
 
 # Loop over each trading day
-for day_idx, current_date in enumerate(last_60_days):
+for day_idx, current_date in enumerate(last_90_days):
     logging.info(f'Simulating from day {day_idx + 1}/{num_days} ({current_date.date()})')
 
     # Remaining days from current date
-    remaining_days = last_60_days[last_60_days >= current_date]
-    N = len(remaining_days)  # 时间步数
+    remaining_days = last_90_days[last_90_days >= current_date]
+    N = len(remaining_days)
 
     # Use initial prices (you can update S0 if you have observed prices on current_date)
     try:
@@ -151,7 +151,7 @@ for day_idx, current_date in enumerate(last_60_days):
     simulated_prices_S2[:, day_idx] = S_simulated[:, 0, 1]
 
     # For the first 5 days, store the full price paths
-    if day_idx < 62:
+    if day_idx < 92:
         full_price_paths_S1.append(S_simulated[:, :, 0])
         full_price_paths_S2.append(S_simulated[:, :, 1])
         full_dates.append(remaining_days)
@@ -238,7 +238,7 @@ def payoff(paths1, paths2, params, fdos):
 # Initialize variables
 payoffs_list = []
 params = {'Denomination': 1000, 'Coupon_Rate': 0.02}
-fdos = last_60_days[0]
+fdos = last_90_days[0]
 batch_size = 1000  # Number of simulations per day
 
 # Loop over each day
@@ -264,8 +264,8 @@ for day_idx in range(len(full_price_paths_S1)):
     paths_S2_df.columns = sim_indices
 
     # Call the payoff function
-    payoffs = payoff(paths_S1_df, paths_S2_df, params, fdos)
-
+    payoffs = payoff(paths_S1_df, paths_S2_df, params, last_90_days[day_idx])
+    '''
     #discount to the day of observation
     # List to store groups of discounted lists
     groups_of_discounted_values = []
@@ -280,15 +280,18 @@ for day_idx in range(len(full_price_paths_S1)):
 
         # Add the discounted values up to n elements for this group
         groups_of_discounted_values.append(discounted_values)
-
+    
     # Calculate the average payoff for each group
     avg_payoffs = [np.mean(group) for group in groups_of_discounted_values]
+'''
+    # Calculate the average payoff for each group no discount
+    avg_payoffs = np.mean(payoffs)
 
     # Store the payoffs
     payoffs_list.append(avg_payoffs)
 
 print(payoffs_list)
-
+print(len(payoffs_list))
 
 plt.figure(figsize=(12, 6))
 plt.plot(payoffs_list, label="Simulated Prices")
@@ -334,4 +337,6 @@ for day_idx in range(len(full_price_paths_S1)):
     plt.tight_layout()
     plt.show()
 '''
+
+
 
