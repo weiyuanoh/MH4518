@@ -220,7 +220,7 @@ def cv(data, lonza_path: pd.DataFrame, sika_path: pd.DataFrame, fdos: pd.Timesta
     return theta_CV
 
 
-def cv2(payoff_gbm, data: pd.DataFrame, fdos):
+def cv2(payoff_gbm, data: pd.DataFrame, fdos, original_sika):
     '''
     Takes in simulated payoff_gbm.
     E_Y is the mean of Lonza for a new set of randomness 
@@ -229,17 +229,18 @@ def cv2(payoff_gbm, data: pd.DataFrame, fdos):
         lonza_path: dataframe of lonza paths on the cs.initial_fixing_date for n sims
     
     '''
-    sim_extra = gbm.multi_asset_gbm_n_sims(plot= False, plotasset= False, nsims=100, data=data, fdos = fdos) #new lonza set of randomness 
-    lonza_path_new = sim_extra['LONN.SW']
-    lonza_path_new_tail = lonza_path_new.iloc[-1].values
+    params_product = {
+    'Denomination': 1000,
+    'Coupon_Rate': (0.08 / 4) ,  # Quarterly coupon payments
+}
 
-    mean_X = np.mean(payoff_gbm)
-    E_Y = np.mean(lonza_path_new_tail)
-    mean_Y = np.mean(lonza_path_new_tail)
 
+    # computing beta with initial set of GBM simulations 
+    terminal_original_sika = original_sika.iloc[-1].values
     var_X = np.var(payoff_gbm, ddof = 1)
-    var_Y = np.var(lonza_path_new_tail, ddof = 1)
-    cov_matrix = np.cov(payoff_gbm, lonza_path_new_tail, ddof=1)
+    var_Y = np.var(terminal_original_sika, ddof = 1)
+    print('Var_Y:', var_Y)
+    cov_matrix = np.cov(payoff_gbm, terminal_original_sika, ddof=1)
     cov_XY = cov_matrix[0,1]
 
     corr_XY =   cov_XY / np.sqrt(var_X * var_Y)  
@@ -247,7 +248,20 @@ def cv2(payoff_gbm, data: pd.DataFrame, fdos):
     beta = cov_XY / var_Y
     print(f"Beta (β) Coefficient: {beta}")
         # Compute control variate estimator
-    theta_CV = mean_X + beta * (E_Y - mean_Y)
+
+    # compute mean_X and mean_Y with new set of randomness
+    sim_extra = gbm.multi_asset_gbm_n_sims(plot= False, plotasset= False, nsims=cs.n_sims, data=data, fdos = fdos) #new lonza set of randomness 
+    sika_path_new = sim_extra['SIKA.SW']
+    sika_path_new_terminal = sika_path_new.iloc[-1].values
+    lonza_path_new = sim_extra['LONN.SW']
+    lonza_path_new_terminal = lonza_path_new.iloc[-1].values
+    payoff_extra = pf.payoff(lonza_path_new, sika_path_new, params_product, fdos) # new set of X
+    print('Payoff array', payoff_extra)
+    mean_X = np.mean(payoff_extra)
+    mean_Y = np.mean(lonza_path_new_terminal)
+    E_Y = np.mean(terminal_original_sika)
+    theta_CV = mean_X + beta * (mean_Y - E_Y)
+    print("Correction:", mean_Y - E_Y)
 
     var_theta_CV = var_X - (cov_XY ** 2) / var_Y
     variance_reduction = (var_X - var_theta_CV) / var_X * 100

@@ -93,7 +93,7 @@ if __name__ == '__main__':
     print("Present Value List:")
     print(present_value_list)
 
-    productprice = pp.get_product_price()
+    productprice = pp.product_price()
     productprice
     n=fig, ax = plt.subplots(figsize=(12, 6))
     present_value_df = pd.DataFrame({'Avg Payoff': present_value_list}, index=T)

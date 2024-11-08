@@ -41,7 +41,7 @@ def process_fdos(args):
         # Set up logging for the child process
         logger = logging.getLogger(f'Process-{fdos}')
         logger.info(f"Processing FDOS: {fdos}")
-        cs.n_sims = 100
+        cs.n_sims = 10
         # Run the simulation
         sim_T = gbm.multi_asset_gbm_n_sims(
             plot=False,
@@ -59,8 +59,8 @@ def process_fdos(args):
         payoff_mc = pf.payoff(paths1=lonza_path, paths2=sika_path, params=params_product, fdos=fdos)
         
         # 2. Control Variate Payoff
-        payoff_cv = vr.cv(data=data, lonza_path=lonza_path, sika_path=sika_path, fdos=fdos, payoffs_gbm=payoff_mc)
-        payoff_cv2 = vr.cv2(payoff_gbm= payoff_mc, data = data, fdos= fdos)
+        #payoff_cv = vr.cv(data=data, lonza_path=lonza_path, sika_path=sika_path, fdos=fdos, payoffs_gbm=payoff_mc)
+        payoff_cv2 = vr.cv2(payoff_gbm= payoff_mc, data = data, fdos= fdos, original_sika=lonza_path)
         
         # 4. Empirical Martingale Correction Payoff
         # Assuming vr.emc is your Empirical Martingale Correction function
@@ -96,7 +96,7 @@ def main():
     date_list = dates.get_list_dates(cs.initial_fixing_date, cs.final_fixing_date)
     date_list = pd.Series(date_list).tolist()
     # Uncomment the following line to limit the number of dates for testing
-    #date_list = date_list[:5]  
+    # date_list = date_list[:120]  
     
     # Initialize the multiprocessing Pool
     num_processes = mp.cpu_count()
@@ -117,7 +117,7 @@ def main():
     present_value_EMC_list = list(present_value_EMC_list)
 
     # Obtaining Realized Price 
-    realized_price = pp.get_product_price()
+    realized_price = pp.product_price()
     
     # Plotting the present values
     plt.figure(figsize=(12, 8))
