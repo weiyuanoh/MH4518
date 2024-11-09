@@ -41,7 +41,7 @@ def process_fdos(args):
         # Set up logging for the child process
         logger = logging.getLogger(f'Process-{fdos}')
         logger.info(f"Processing FDOS: {fdos}")
-        cs.n_sims = 10
+        cs.n_sims = 1000
         # Run the simulation
         sim_T = gbm.multi_asset_gbm_n_sims(
             plot=False,
@@ -130,6 +130,8 @@ def main():
     plt.title('Present Value Estimates Using Various Variance Reduction Techniques')
     plt.legend()
     plt.grid(True)
+    file_path = r"C:\Users\Admin\PycharmProjects\Simulation Techniques in Finance\.venv\MH4518\WY\Graphs\VarianceReduction_nsims1000"
+    plt.savefig(file_path)
     plt.show()
     
 
