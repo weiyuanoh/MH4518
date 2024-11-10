@@ -258,7 +258,7 @@ def cv2(payoff_gbm, data: pd.DataFrame, fdos, original_sika):
     payoff_extra = pf.payoff(lonza_path_new, sika_path_new, params_product, fdos) # new set of X
     print('Payoff array', payoff_extra)
     mean_X = np.mean(payoff_extra)
-    mean_Y = np.mean(lonza_path_new_terminal)
+    mean_Y = np.mean(sika_path_new_terminal)
     E_Y = np.mean(terminal_original_sika)
     theta_CV = mean_X + beta * (mean_Y - E_Y)
     print("Correction:", mean_Y - E_Y)
@@ -292,38 +292,37 @@ def restructure_simulated_paths(sim_T):
     """
     # Select the terminal row (last date)
     terminal_row = sim_T.iloc[-1]
-    
+
     # Ensure columns are a MultiIndex
     if not isinstance(terminal_row.index, pd.MultiIndex):
         raise ValueError("Columns of sim_T must be a MultiIndex with levels [Asset, Simulation].")
-    
+
     # Convert the Series with MultiIndex to DataFrame
     terminal_df = terminal_row.reset_index()
     terminal_df.columns = ['Asset', 'Simulation', 'Price']
-    
+
     # Pivot the DataFrame to have Simulation as rows and Asset as columns
     terminal_prices = terminal_df.pivot(index='Simulation', columns='Asset', values='Price')
-    
+
     return terminal_prices
-
-
 
 def empirical_martingale_correction(simulated_paths, r, T, S0):
     """
-    Applies Empirical Martingale Correction to the simulated asset paths.
+    Applies Empirical Martingale Correction to the simulated asset paths by computing
+    a single scaling factor based on individual asset scaling factors.
 
     Params:
         simulated_paths (pd.DataFrame): Simulated asset paths at maturity for all simulations.
                                         Columns are asset names, rows are simulations.
         r (float): Risk-free interest rate.
         T (float): Time to maturity in years.
-        S0 (dict): Initial asset prices, e.g., {'LONN.SW': 549.60, 'SIKA.SW': 240.40}.
+        S0 (dict): Initial asset prices, e.g., {'Lonza': 549.60, 'Sika': 240.40}.
 
     Returns:
-        correction_factors (dict): Correction factors for each asset.
+        unified_scaling_factor (float): Aggregated scaling factor for all assets.
     """
-    correction_factors = {}
     discount_factor = np.exp(-r * T)
+    scaling_factors = []
 
     for asset in simulated_paths.columns:
         # Compute discounted simulated prices
@@ -332,59 +331,78 @@ def empirical_martingale_correction(simulated_paths, r, T, S0):
         empirical_mean = np.mean(discounted_S_T)
         # Theoretical expectation
         theoretical_mean = S0[asset]
-        # Correction factor
-        correction = empirical_mean - theoretical_mean
-        correction_factors[asset] = correction
+        
+        if empirical_mean == 0:
+            raise ValueError(f"Empirical mean for asset {asset} is zero. Cannot compute scaling factor.")
+        
+        # Scaling factor to adjust the empirical mean to match theoretical mean
+        scaling_factor = theoretical_mean / empirical_mean
+        scaling_factors.append(scaling_factor)
 
-    return correction_factors
+    # Aggregate scaling factors (e.g., arithmetic mean)
+    unified_scaling_factor = np.mean(scaling_factors)
+    
+    return unified_scaling_factor
 
-def adjust_payoffs(payoffs, correction_factors):
+def adjust_payoffs(payoffs, unified_scaling_factor):
     """
-    Adjusts the original payoffs using the martingale correction factors.
+    Adjusts the original payoffs using the unified martingale correction scaling factor.
 
     Params:
         payoffs (np.ndarray): Original array of payoffs from simulations.
-        correction_factors (dict): Correction factors for each asset.
+        unified_scaling_factor (float): Unified scaling factor for all assets.
 
     Returns:
         adjusted_payoffs (np.ndarray): Adjusted array of payoffs.
     """
-    # Calculate average correction factor across assets
-    average_correction = np.mean(list(correction_factors.values()))
-    # Adjust payoffs
-    adjusted_payoffs = payoffs - average_correction
+    # Apply the unified scaling factor multiplicatively
+    adjusted_payoffs = payoffs * unified_scaling_factor
     return adjusted_payoffs
 
-def EMC(fdos, params_product, sim_T, payoff_original ):
+def EMC(fdos, params_product, sim_T, payoff_original, data):
     """
     Processes a single FDOS: simulates paths, computes payoffs, applies EMC, and discounts to present value.
 
     Params:
         fdos: First date of simulation
+        params_product: Parameters of the product
+        sim_T: Simulated asset paths (MultiIndex DataFrame)
+        payoff_original: Original payoffs from simulations (np.ndarray)
+        data: DataFrame containing initial asset prices indexed by FDOS
 
     Returns:
         present_value: Discounted present value of adjusted payoffs
     """
     try:
-        # Restructure the simulated paths
+        # Restructure the simulated paths to get terminal prices
         terminal_prices = restructure_simulated_paths(sim_T)
         
-        # Calculate original payoffs
+        # Retrieve initial asset prices as a dictionary
+        S0 = data.loc[fdos].to_dict()  # e.g., {'Lonza': 549.60, 'Sika': 240.40}
         
-        
-        # Compute correction factors
-        S0 = {'LONN.SW': 549.60, 'SIKA.SW': 240.40}  # Initial prices
-        # Ensure that 'T' is the time to maturity from 'fdos' to 'final_fixing_date'
+        # Calculate time to maturity in years
         T_discount = dates.num_business_days(fdos, cs.final_fixing_date) / 252  # Assuming 252 trading days
-        T = T_discount  # Time to maturity in years
-        correction_factors = empirical_martingale_correction(terminal_prices, cs.interest_rate, T, S0)
+        T = T_discount
         
-        # Adjust payoffs
-        adjusted_payoffs = adjust_payoffs(payoff_original, correction_factors)
+        # Compute the unified scaling factor using multiplicative correction
+        unified_scaling_factor = empirical_martingale_correction(
+            simulated_paths=terminal_prices,
+            r=cs.interest_rate,
+            T=T,
+            S0=S0
+        )
         
-        return adjusted_payoffs
+        # Adjust payoffs uniformly using the scaling factor
+        adjusted_payoffs = adjust_payoffs(payoff_original, unified_scaling_factor)
+        
+        # Discount adjusted payoffs to present value
+        discount_factor = np.exp(-cs.interest_rate * T)
+        present_value = discount_factor * np.mean(adjusted_payoffs)
+        
+        return present_value
     except Exception as e:
         print(f"Error processing FDOS {fdos}: {e}")
         return np.nan  # Return NaN or handle as appropriate
+
 
 
