@@ -223,50 +223,110 @@ def cv(data, lonza_path: pd.DataFrame, sika_path: pd.DataFrame, fdos: pd.Timesta
 def cv2(payoff_gbm, data: pd.DataFrame, fdos, original_sika):
     '''
     Takes in simulated payoff_gbm.
-    E_Y is the mean of Lonza for a new set of randomness 
+    E_Y is the mean of Sika's terminal values from original simulations.
     
     Params:
-        lonza_path: dataframe of lonza paths on the cs.initial_fixing_date for n sims
-    
+        payoff_gbm: array-like, payoffs from initial simulations
+        data: DataFrame containing initial asset prices
+        fdos: First date of simulation (pricing date)
+        original_sika: DataFrame of simulated Sika paths
     '''
     params_product = {
-    'Denomination': 1000,
-    'Coupon_Rate': (0.08 / 4) ,  # Quarterly coupon payments
-}
+        'Denomination': 1000,
+        'Coupon_Rate': (0.08 / 4),  # Quarterly coupon payments
+    }
 
-
-    # computing beta with initial set of GBM simulations 
+    # Compute terminal values
     terminal_original_sika = original_sika.iloc[-1].values
-    var_X = np.var(payoff_gbm, ddof = 1)
-    var_Y = np.var(terminal_original_sika, ddof = 1)
+    var_X = np.var(payoff_gbm, ddof=1)
+    var_Y = np.var(terminal_original_sika, ddof=1)
+    print('Var_X:', var_X)
     print('Var_Y:', var_Y)
-    cov_matrix = np.cov(payoff_gbm, terminal_original_sika, ddof=1)
-    cov_XY = cov_matrix[0,1]
 
-    corr_XY =   cov_XY / np.sqrt(var_X * var_Y)  
-    print(f"Correlation between X and Y: {corr_XY:.4f}") 
+    # Check for zero variance
+    if var_Y == 0:
+        print("Error: Variance of Y (Var_Y) is zero. Cannot compute beta.")
+        return np.nan
+
+    # Compute covariance and correlation
+    cov_matrix = np.cov(payoff_gbm, terminal_original_sika, ddof=1)
+    if cov_matrix.shape != (2, 2):
+        print("Error: Covariance matrix shape is incorrect.")
+        return np.nan
+
+    cov_XY = cov_matrix[0, 1]
+    print('Cov_XY:', cov_XY)
+
+    if np.isnan(cov_XY):
+        print("Error: Covariance between X and Y is NaN.")
+        return np.nan
+
+    if var_X == 0:
+        print("Error: Variance of X (Var_X) is zero. Cannot compute correlation.")
+        return np.nan
+
+    corr_XY = cov_XY / np.sqrt(var_X * var_Y)
+    print(f"Correlation between X and Y: {corr_XY:.4f}")
+
     beta = cov_XY / var_Y
     print(f"Beta (β) Coefficient: {beta}")
-        # Compute control variate estimator
 
-    # compute mean_X and mean_Y with new set of randomness
-    sim_extra = gbm.multi_asset_gbm_n_sims(plot= False, plotasset= False, nsims=cs.n_sims, data=data, fdos = fdos) #new lonza set of randomness 
+    # Compute control variate estimator
+
+    # Generate new simulations for Y
+    sim_extra = gbm.multi_asset_gbm_n_sims(
+        plot=False, 
+        plotasset=False, 
+        nsims=cs.n_sims, 
+        data=data, 
+        fdos=fdos
+    )  # new set of simulations
+
+    # Extract new Sika and Lonza paths
     sika_path_new = sim_extra['SIKA.SW']
     sika_path_new_terminal = sika_path_new.iloc[-1].values
     lonza_path_new = sim_extra['LONN.SW']
     lonza_path_new_terminal = lonza_path_new.iloc[-1].values
-    payoff_extra = pf.payoff(lonza_path_new, sika_path_new, params_product, fdos) # new set of X
-    print('Payoff array', payoff_extra)
-    mean_X = np.mean(payoff_extra)
-    mean_Y = np.mean(sika_path_new_terminal)
-    E_Y = np.mean(terminal_original_sika)
-    theta_CV = mean_X + beta * (mean_Y - E_Y)
-    print("Correction:", mean_Y - E_Y)
 
+    # Compute payoffs for new simulations
+    payoff_extra = pf.payoff(lonza_path_new, sika_path_new, params_product, fdos)  # new set of X
+    print('Payoff array:', payoff_extra)
+
+    # Check for NaNs in new payoffs
+    if np.isnan(payoff_extra).any():
+        print("Error: NaNs found in payoff_extra.")
+        return np.nan
+
+    # Compute means
+    mean_X = np.mean(payoff_extra)
+    mean_Y = np.mean(lonza_path_new_terminal)
+    E_Y = np.mean(terminal_original_sika)
+    print(f"mean_X: {mean_X}, mean_Y: {mean_Y}, E_Y: {E_Y}")
+
+    # Check for NaNs in means
+    if np.isnan(mean_X) or np.isnan(mean_Y) or np.isnan(E_Y):
+        print("Error: One of the means is NaN.")
+        return np.nan
+
+    # Compute theta_CV
+    theta_CV = mean_X + beta * (mean_Y - E_Y)
+    print("Correction (mean_Y - E_Y):", mean_Y - E_Y)
+    print("CV Estimate Payoff (theta_CV):", theta_CV)
+
+    # Compute variance of theta_CV
     var_theta_CV = var_X - (cov_XY ** 2) / var_Y
-    variance_reduction = (var_X - var_theta_CV) / var_X * 100
+    if np.isnan(var_theta_CV):
+        print("Error: var_theta_CV is NaN.")
+        return np.nan
+
+    # Compute variance reduction
+    if var_X == 0:
+        print("Error: Var_X is zero. Cannot compute variance reduction.")
+        variance_reduction = 0
+    else:
+        variance_reduction = (var_X - var_theta_CV) / var_X * 100
     print(f"Variance Reduction Achieved: {variance_reduction:.2f}%")
-    print("CV Estimate Payoff :", theta_CV)
+
     return theta_CV
 
 

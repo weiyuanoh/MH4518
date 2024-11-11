@@ -388,6 +388,53 @@ Tlist = dates.num_business_days(cs.initial_fixing_date, cs.final_fixing_date)
 present_value_list = []
 indexlist = []
 
+def compute_rmse(estimates, realized):
+    """
+    Compute the Root Mean Square Error (RMSE) between estimates and realized values,
+    excluding any pairs with NaN values.
+    
+    Params:
+        estimates (np.ndarray or pd.Series): Estimated values.
+        realized (float or np.ndarray or pd.Series): Realized values.
+    
+    Returns:
+        rmse (float): The computed RMSE of the valid data points.
+                     Returns np.nan if no valid data points are available.
+    """
+    # Convert estimates and realized to numpy arrays for consistency
+    estimates = np.array(estimates)
+    
+    if isinstance(realized, pd.Series):
+        realized = realized.values
+    elif isinstance(realized, (list, np.ndarray)):
+        realized = np.array(realized)
+    else:
+        # Assume realized is a scalar, create an array filled with the scalar value
+        realized = np.full_like(estimates, realized, dtype=np.float64)
+    
+    # Ensure both arrays have the same length
+    if estimates.shape != realized.shape:
+        raise ValueError("Estimates and realized values must have the same shape.")
+    
+    # Create a boolean mask where neither estimates nor realized are NaN
+    valid_mask = ~np.isnan(estimates) & ~np.isnan(realized)
+    
+    # Check if there are any valid data points
+    if not np.any(valid_mask):
+        print("Warning: No valid data points available for RMSE calculation.")
+        return np.nan
+    
+    # Apply the mask to filter out NaN values
+    valid_estimates = estimates[valid_mask]
+    valid_realized = realized[valid_mask]
+    
+    # Compute Mean Squared Error (MSE)
+    mse = np.mean((valid_estimates - valid_realized) ** 2)
+    
+    # Compute Root Mean Squared Error (RMSE)
+    rmse = np.sqrt(mse)
+    
+    return rmse
 def process_fdos(args):
     fdos = args  # Only pass 'fdos'
     try:
@@ -428,7 +475,6 @@ if __name__ == '__main__':
 
     date_list = dates.get_list_dates(cs.initial_fixing_date, cs.final_fixing_date)
     date_list = pd.Series(date_list).tolist()
-    # For testing, limit the number of dates
     # date_list = date_list[:5]  # Remove or adjust this line in production
 
     T = date_list
@@ -447,11 +493,23 @@ if __name__ == '__main__':
     print(present_value_list)
 
     productprice = pp.product_price()
+    realized_price_series = productprice
 
     n=fig, ax = plt.subplots(figsize=(12, 6))
     present_value_df = pd.DataFrame({'Avg Payoff': present_value_list}, index=T)
     present_value_df.plot(ax = ax)
+    if isinstance(realized_price_series, pd.Series) and len(realized_price_series) > 1:
+        # Find the intersection of dates
+        common_dates = present_value_df.index.intersection(realized_price_series.index)
+        aligned_present_value = present_value_df.loc[common_dates].squeeze()
+        aligned_realized_price = realized_price_series.loc[common_dates]
 
+        print(aligned_realized_price.shape)
+        print(aligned_present_value.shape)
+   
+    # Calculate the RMSE between BSM and the Actual Price path
+        rmse_mc = compute_rmse(aligned_present_value, aligned_realized_price)
+        print(f"RMSE (MC vs Realized Price): {rmse_mc:.4f}")
 
 
     productprice.plot(ax =ax)

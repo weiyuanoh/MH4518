@@ -15,34 +15,92 @@ import multiprocessing as mp
 import logging
 
 # Define RMSE function
+import numpy as np
+import pandas as pd
+
 def compute_rmse(estimates, realized):
     """
-    Compute the Root Mean Square Error (RMSE) between estimates and realized value.
-
+    Compute the Root Mean Square Error (RMSE) between estimates and realized values,
+    excluding any pairs with NaN values.
+    
     Params:
         estimates (np.ndarray or pd.Series): Estimated values.
         realized (float or np.ndarray or pd.Series): Realized values.
-
+    
     Returns:
-        rmse (float): The computed RMSE.
+        rmse (float): The computed RMSE of the valid data points.
+                     Returns np.nan if no valid data points are available.
     """
+    # Convert estimates and realized to numpy arrays for consistency
     estimates = np.array(estimates)
     
     if isinstance(realized, pd.Series):
-        realized = np.array(realized)
+        realized = realized.values
     elif isinstance(realized, (list, np.ndarray)):
         realized = np.array(realized)
     else:
-        # Assume realized is a scalar
-        realized = np.full_like(estimates, realized)
+        # Assume realized is a scalar, create an array filled with the scalar value
+        realized = np.full_like(estimates, realized, dtype=np.float64)
     
     # Ensure both arrays have the same length
     if estimates.shape != realized.shape:
         raise ValueError("Estimates and realized values must have the same shape.")
     
-    mse = np.mean((estimates - realized) ** 2)
+    # Create a boolean mask where neither estimates nor realized are NaN
+    valid_mask = ~np.isnan(estimates) & ~np.isnan(realized)
+    
+    # Check if there are any valid data points
+    if not np.any(valid_mask):
+        print("Warning: No valid data points available for RMSE calculation.")
+        return np.nan
+    
+    # Apply the mask to filter out NaN values
+    valid_estimates = estimates[valid_mask]
+    valid_realized = realized[valid_mask]
+    
+    # Compute Mean Squared Error (MSE)
+    mse = np.mean((valid_estimates - valid_realized) ** 2)
+    
+    # Compute Root Mean Squared Error (RMSE)
     rmse = np.sqrt(mse)
+    
     return rmse
+
+
+def validate_data(estimates, realized):
+    """
+    Validates the input data for RMSE computation.
+    
+    Params:
+        estimates (np.ndarray or pd.Series): Estimated values.
+        realized (float or np.ndarray or pd.Series): Realized values.
+    
+    Returns:
+        bool: True if data is valid, False otherwise.
+    """
+    estimates = np.array(estimates)
+    
+    if isinstance(realized, pd.Series):
+        realized = realized.values
+    elif isinstance(realized, (list, np.ndarray)):
+        realized = np.array(realized)
+    else:
+        realized = np.full_like(estimates, realized, dtype=np.float64)
+    
+    # Check for shape compatibility
+    if estimates.shape != realized.shape:
+        print("Error: Estimates and realized values must have the same shape.")
+        return False
+    
+    # Check for non-NaN estimates and realized values
+    if np.isnan(estimates).all():
+        print("Error: All estimates are NaN.")
+        return False
+    if np.isnan(realized).all():
+        print("Error: All realized values are NaN.")
+        return False
+    
+    return True
 
 def getdata():
     data = yfin.download(['LONN.SW', 'SIKA.SW'], period='max')['Adj Close']
@@ -66,7 +124,7 @@ def process_fdos(args):
         # Set up logging for the child process
         logger = logging.getLogger(f'Process-{fdos}')
         logger.info(f"Processing FDOS: {fdos}")
-        cs.n_sims = 10  # Increased sims for better accuracy
+        cs.n_sims = 1000  # Increased sims for better accuracy
         
         # Optional: Set a seed for reproducibility
         np.random.seed(42 + hash(fdos) % 10000)
@@ -89,7 +147,7 @@ def process_fdos(args):
         
         # 2. Control Variate Payoff
         #payoff_cv = vr.cv(data=data, lonza_path=lonza_path, sika_path=sika_path, fdos=fdos, payoffs_gbm=payoff_mc)
-        payoff_cv2 = vr.cv2(payoff_gbm=payoff_mc, data=data, fdos=fdos, original_sika=sika_path)
+        payoff_cv2 = vr.cv2(payoff_gbm=payoff_mc, data=data, fdos=fdos, original_sika=lonza_path)
         
         # 4. Empirical Martingale Correction Payoff
         # Assuming vr.EMC is your Empirical Martingale Correction function
@@ -112,7 +170,7 @@ def process_fdos(args):
         return present_value_mc, present_value_cv, present_value_EMC
     except Exception as e:
         print(f"Error processing FDOS {fdos}: {e}")
-        return None  # or some default value
+        return None 
 
 def main():
     # Configure logging in the main process
@@ -124,20 +182,19 @@ def main():
     # Generate the list of dates
     date_list = dates.get_list_dates(cs.initial_fixing_date, cs.final_fixing_date)
     date_list = pd.Series(date_list).tolist()
-    # Uncomment the following line to limit the number of dates for testing
     # date_list = date_list[:120]  
     
     # Initialize the multiprocessing Pool
     num_processes = mp.cpu_count()
     with mp.Pool(processes=num_processes) as pool:
-        # Map the process_fdos function to each fdos in date_list
+
         # This will return a list of tuples: [(mc1, cv1, EMC1), (mc2, cv2, EMC2), ...]
         results = pool.map(process_fdos, date_list)
     
     # Filter out any None results due to errors
     results = [res for res in results if res is not None]
     
-    # Unzip the list of tuples into three separate lists
+   
     present_value_mc_list, present_value_cv_list, present_value_EMC_list = zip(*results)
     
     # Convert present_value lists to pandas Series with date_list as index
