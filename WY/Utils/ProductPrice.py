@@ -68,7 +68,7 @@ def read_hist_rates():
     return combined
 
 def product_price():
-    productprice = pd.read_json(r'C:\Users\Espietsp\PycharmProjects\Simulation Techniques\.venv\MH4518\WY\Data\ProductPrice.json')
+    productprice = pd.read_json(r'C:\Users\Admin\PycharmProjects\Simulation Techniques in Finance\.venv\MH4518\WY\Data\ProductPrice.json')
     productprice['date'] = pd.to_datetime(productprice['date'])
     productprice.sort_values('date', inplace=True)
     productprice.set_index('date', inplace=True)
