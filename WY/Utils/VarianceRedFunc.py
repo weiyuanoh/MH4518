@@ -271,8 +271,6 @@ def cv2(payoff_gbm, data: pd.DataFrame, fdos, original_sika):
     beta = cov_XY / var_Y
     print(f"Beta (β) Coefficient: {beta}")
 
-    # Compute control variate estimator
-
     # Generate new simulations for Y
     sim_extra = gbm.multi_asset_gbm_n_sims(
         plot=False, 

@@ -46,14 +46,7 @@ def get_product_price():
         else:
             print("Unexpected JSON structure:", type(data))
             return None
-
-        # Process the DataFrame as needed
-        if 'date' in productprice.columns and 'value' in productprice.columns:
-            productprice['date'] = pd.to_datetime(productprice['date'])
-            productprice.sort_values('date', inplace=True)
-            productprice.set_index('date', inplace=True)
-            productprice = productprice['value'] * 10
-        else:
+    
             print("Expected columns 'date' and 'value' not found in the data.")
             return None
 
@@ -75,7 +68,7 @@ def read_hist_rates():
     return combined
 
 def product_price():
-    productprice = pd.read_json(r'C:\Users\Admin\PycharmProjects\Simulation Techniques in Finance\.venv\MH4518\WY\Data\ProductPrice.json')
+    productprice = pd.read_json(r'C:\Users\Espietsp\PycharmProjects\Simulation Techniques\.venv\MH4518\WY\Data\ProductPrice.json')
     productprice['date'] = pd.to_datetime(productprice['date'])
     productprice.sort_values('date', inplace=True)
     productprice.set_index('date', inplace=True)
