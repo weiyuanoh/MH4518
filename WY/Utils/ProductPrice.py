@@ -33,11 +33,11 @@ def get_product_price():
 
     if response.status_code == 200:
         try:
-            # Attempt to parse JSON
+            
             data = response.json()
         except json.JSONDecodeError as e:
             print("JSON decoding failed. Response content:")
-            print(response.text)  # Print the response text for debugging
+            print(response.text)  
             return None
 
         # Convert to DataFrame
@@ -54,7 +54,7 @@ def get_product_price():
     else:
         print(f"Failed to retrieve data. Status code: {response.status_code}")
         print("Response content:")
-        print(response.text)  # Print the response text for debugging
+        print(response.text)  
         return None
 
 # read interest functions 
@@ -72,5 +72,5 @@ def product_price():
     productprice['date'] = pd.to_datetime(productprice['date'])
     productprice.sort_values('date', inplace=True)
     productprice.set_index('date', inplace=True)
-    productprice = productprice['value'] * 10
+    productprice = productprice['value'] * 11
     return productprice

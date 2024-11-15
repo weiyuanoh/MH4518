@@ -329,14 +329,6 @@ def cv2(payoff_gbm, data: pd.DataFrame, fdos, original_sika):
 
 
 
-def imptsam():
-    """
-    
-    Construst a important sampling estimate of sigma 
-    """
-    pass 
-
-
 def restructure_simulated_paths(sim_T):
     """
     Restructure the MultiIndex DataFrame returned by multi_asset_gbm_n_sims

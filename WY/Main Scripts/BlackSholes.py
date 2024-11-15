@@ -123,12 +123,12 @@ if __name__ == '__main__':
     date_list = dates.get_list_dates(cs.initial_fixing_date, cs.final_fixing_date)
     date_list = pd.Series(date_list).tolist()
     # For testing, limit the number of dates
-    #date_list = date_list[:5]  # Remove or adjust this line in production
+    # date_list = date_list[:5]  # Remove or adjust this line in production
 
     T = date_list
 
     # Use a smaller number of simulations for testing
-    cs.n_sims = 1000  # Adjust as needed
+    cs.n_sims = 1000 # Adjust as needed
 
     # Set up the multiprocessing pool
     num_processes = min(mp.cpu_count(), 6)  # Adjust the number of processes
@@ -141,16 +141,35 @@ if __name__ == '__main__':
     print(present_value_list)
 
     productprice = pp.product_price()
-    productprice_array = productprice.to_numpy()
-    n=fig, ax = plt.subplots(figsize=(12, 6))
-    present_value_df = pd.DataFrame({'Avg Payoff': present_value_list}, index=T)
-    present_value_df.plot(ax = ax)
+    present_value_df = pd.Series(present_value_list, index=T)
+    print(present_value_df)
+
+
+    # Export to CSV 
+    file = r'C:\Users\Admin\PycharmProjects\Simulation Techniques in Finance\.venv\MH4518\WY\Graphs\BlackScholesMC_100.csv'
+    present_value_df.to_csv(file) 
+
+
+    if isinstance(productprice, pd.Series) and len(productprice) > 1:
+        # Allign dates between Payoff Array and Product Price 
+        common_dates = present_value_df.index.intersection(productprice.index)
+        present_value_df = present_value_df.loc[common_dates]
+        print(present_value_df)
+        productprice = productprice.loc[common_dates]
+
+    plt.plot(present_value_df.index, present_value_df.values, label = 'BSM MC')
+    plt.plot(productprice.index, productprice.values, label = 'Product Price')
+    plt.xlabel('FDOS')
+    plt.ylabel('Present Value')
+    plt.legend()
+    plt.show()
 
     # Calculate the RMSE between BSM and the Actual Price path
 
-    rmse_mc = compute_rmse(present_value_list, productprice_array)
+    rmse_mc = compute_rmse(present_value_df, productprice)
     print(f"RMSE (MC vs Realized Price): {rmse_mc:.4f}")
 
+    
+ 
 
-    productprice.plot(ax =ax)
-    plt.show()
+    

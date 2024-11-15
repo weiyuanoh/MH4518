@@ -39,7 +39,7 @@ def compute_rmse(estimates, realized):
     elif isinstance(realized, (list, np.ndarray)):
         realized = np.array(realized)
     else:
-        # Assume realized is a scalar, create an array filled with the scalar value
+        
         realized = np.full_like(estimates, realized, dtype=np.float64)
     
     # Ensure both arrays have the same length
@@ -54,14 +54,13 @@ def compute_rmse(estimates, realized):
         print("Warning: No valid data points available for RMSE calculation.")
         return np.nan
     
-    # Apply the mask to filter out NaN values
+
     valid_estimates = estimates[valid_mask]
     valid_realized = realized[valid_mask]
     
-    # Compute Mean Squared Error (MSE)
+  
     mse = np.mean((valid_estimates - valid_realized) ** 2)
-    
-    # Compute Root Mean Squared Error (RMSE)
+
     rmse = np.sqrt(mse)
     
     return rmse
@@ -92,7 +91,6 @@ def validate_data(estimates, realized):
         print("Error: Estimates and realized values must have the same shape.")
         return False
     
-    # Check for non-NaN estimates and realized values
     if np.isnan(estimates).all():
         print("Error: All estimates are NaN.")
         return False
@@ -111,7 +109,7 @@ def getdata():
 data = getdata()
 params_product = {
     'Denomination': 1000,
-    'Coupon_Rate': (0.08 / 4),  # Quarterly coupon payments
+    'Coupon_Rate': (0.08 / 4),  
 }
 
 Tlist = dates.num_business_days(cs.initial_fixing_date, cs.final_fixing_date)
@@ -126,10 +124,8 @@ def process_fdos(args):
         logger.info(f"Processing FDOS: {fdos}")
         cs.n_sims = 1000  # Increased sims for better accuracy
         
-        # Optional: Set a seed for reproducibility
         np.random.seed(42 + hash(fdos) % 10000)
         
-        # Run the simulation
         sim_T = gbm.multi_asset_gbm_n_sims(
             plot=False,
             plotasset=False,
@@ -149,8 +145,7 @@ def process_fdos(args):
         #payoff_cv = vr.cv(data=data, lonza_path=lonza_path, sika_path=sika_path, fdos=fdos, payoffs_gbm=payoff_mc)
         payoff_cv2 = vr.cv2(payoff_gbm=payoff_mc, data=data, fdos=fdos, original_sika=lonza_path)
         
-        # 4. Empirical Martingale Correction Payoff
-        # Assuming vr.EMC is your Empirical Martingale Correction function
+        # 3. Empirical Martingale Correction Payoff
         payoff_EMC = vr.EMC(fdos=fdos, params_product=params_product, sim_T=sim_T, payoff_original=payoff_mc, data=data)
         
         # Compute expected payoffs
@@ -159,8 +154,8 @@ def process_fdos(args):
         expected_payoff_EMC = np.mean(payoff_EMC)
         
         # Discount to present value (assuming present value as of fdos)
-        r = cs.interest_rate  # Use the same interest rate as in the simulation
-        T_discount = dates.num_business_days(fdos, cs.final_fixing_date) / 252  # Time in years
+        r = cs.interest_rate  
+        T_discount = dates.num_business_days(fdos, cs.final_fixing_date) / 252 
         
         present_value_mc = expected_payoff_mc * np.exp(-r * T_discount)
         present_value_cv = expected_payoff_cv * np.exp(-r * T_discount)
@@ -184,7 +179,7 @@ def main():
     date_list = pd.Series(date_list).tolist()
     # date_list = date_list[:120]  
     
-    # Initialize the multiprocessing Pool
+
     num_processes = mp.cpu_count()
     with mp.Pool(processes=num_processes) as pool:
 
@@ -203,16 +198,16 @@ def main():
     present_value_EMC_series = pd.Series(present_value_EMC_list, index=date_list[:len(present_value_EMC_list)])
     
     # Obtaining Realized Price 
-    realized_price = pp.product_price()  # Ensure this returns a scalar or a pandas Series
+    realized_price = pp.product_price()  
     
-    # Check if realized_price is a Pandas Series
+ 
     if isinstance(realized_price, pd.Series):
         realized_price_series = realized_price
     else:
-        # Assume it's a scalar and convert to a Series with a single date (e.g., the last date)
+        
         realized_price_series = pd.Series([realized_price], index=[date_list[-1]])
     
-    # Determine if realized_price is a Series with multiple dates or a scalar
+   
     if isinstance(realized_price_series, pd.Series) and len(realized_price_series) > 1:
         # Find the intersection of dates
         common_dates = present_value_mc_series.index.intersection(realized_price_series.index)
@@ -233,7 +228,7 @@ def main():
         rmse_cv = compute_rmse(present_value_cv_list, realized_price)
         rmse_emc = compute_rmse(present_value_EMC_list, realized_price)
     
-    # Print RMSE results
+ 
     if isinstance(realized_price_series, pd.Series) and len(realized_price_series) > 1:
         print(f"RMSE (MC vs Realized Price): {rmse_mc:.4f}")
         print(f"RMSE (CV vs Realized Price): {rmse_cv:.4f}")
@@ -243,7 +238,7 @@ def main():
         print(f"RMSE (CV vs Realized Price): {rmse_cv:.4f}")
         print(f"RMSE (EMC vs Realized Price): {rmse_emc:.4f}")
     
-    # Plotting the present values
+
     plt.figure(figsize=(12, 8))
     
     if isinstance(realized_price_series, pd.Series) and len(realized_price_series) > 1:
@@ -270,3 +265,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+    
