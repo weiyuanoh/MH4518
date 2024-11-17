@@ -12,3 +12,9 @@ To see Risk Management, go to [WY\Greeks.ipynb](https://github.com/weiyuanoh/MH4
 To see individual functions, go to [WY\Utils][def]
 
 [def]: https://github.com/weiyuanoh/MH4518/tree/main/WY/Utils
+
+May I refer you to [GJ\Code] for the code for the Heston Model
+
+Mat I refer you to [GJ\data] for the dataset used for the Heston Model
+
+May I refer you to [GJ\Result] for the results for the Heston Model
