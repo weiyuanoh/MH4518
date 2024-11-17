@@ -110,11 +110,11 @@ def load_price_data(file_path, asset_name):
 
     return prices[['Date', f'Close_{asset_name}']]
 
-# Paths to your CSV files (update these paths to your actual file locations)
-lonza_price_file = '/Users/guanjuwang/Desktop/TAN /MH4518/lonza_price.csv'  # Update with your actual file path
-sika_price_file = '/Users/guanjuwang/Desktop/TAN /MH4518/sika_price.csv'    # Update with your actual file path
-lonza_option_file = '/Users/guanjuwang/Desktop/TAN /MH4518/lonza_option_copy_7:1.csv'  # Update with your actual file path
-sika_option_file = '/Users/guanjuwang/Desktop/TAN /MH4518/sika_option_copy_7:1.csv'    # Update with your actual file path
+# Paths to your CSV files
+lonza_price_file = '/Users/guanjuwang/Desktop/TAN /MH4518/lonza_price.csv' 
+sika_price_file = '/Users/guanjuwang/Desktop/TAN /MH4518/sika_price.csv'  
+lonza_option_file = '/Users/guanjuwang/Desktop/TAN /MH4518/lonza_option_copy_7:1.csv' 
+sika_option_file = '/Users/guanjuwang/Desktop/TAN /MH4518/sika_option_copy_7:1.csv'  
 
 # Load and preprocess price data for Lonza
 lonza_prices = load_price_data(lonza_price_file, 'Lonza')
@@ -150,7 +150,6 @@ lonza_option_data = load_option_data(lonza_option_file, 'Lonza')
 sika_option_data = load_option_data(sika_option_file, 'Sika')
 
 # Define constants for Lonza and Sika
-# Replace these with the actual spot prices and rates if they differ
 S0_LONN = 549.60
 r_LONN = 0.018  # Risk-free rate for Lonza
 
@@ -165,7 +164,6 @@ def calibrate_heston(asset_name, option_data, S0, r):
         print(f"No valid option data available for {asset_name}. Skipping calibration.")
         return None
 
-    # Define evaluation date as today
     today = ql.Date().todaysDate()
     ql.Settings.instance().evaluationDate = today
 
