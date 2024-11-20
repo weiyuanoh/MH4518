@@ -113,8 +113,8 @@ def load_price_data(file_path, asset_name):
 # Paths to your CSV files
 lonza_price_file = '/Users/guanjuwang/Desktop/TAN /MH4518/lonza_price.csv' 
 sika_price_file = '/Users/guanjuwang/Desktop/TAN /MH4518/sika_price.csv'  
-lonza_option_file = '/Users/guanjuwang/Desktop/TAN /MH4518/lonza_option_copy_7:1.csv' 
-sika_option_file = '/Users/guanjuwang/Desktop/TAN /MH4518/sika_option_copy_7:1.csv'  
+lonza_option_file = '/Users/guanjuwang/Desktop/TAN /MH4518/lonza_option_copy_71.csv' 
+sika_option_file = '/Users/guanjuwang/Desktop/TAN /MH4518/sika_option_copy_71.csv'  
 
 # Load and preprocess price data for Lonza
 lonza_prices = load_price_data(lonza_price_file, 'Lonza')
